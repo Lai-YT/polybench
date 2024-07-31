@@ -16,6 +16,7 @@ MACHINE="$2"
 echo "Machine: $MACHINE";
 echo "Benchmark category: $BENCHCAT";
 rootdir=`pwd`;
+mkdir -p $rootdir/data
 cd "$BENCHCAT" &&
 for i in `ls`; do
     if [ -d "$i" ] && [ -f "$i/$i.c" ]; then
