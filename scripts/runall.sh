@@ -54,6 +54,7 @@ for i in `ls`; do
 		    output=`echo "$res" | sed -e "s/s//g"`;
 		    echo "$j $output" >> $rootdir/data/$MACHINE-$i.dat
 		fi;
+    rm ./transfo;
 	    fi;
 	done;
     fi;

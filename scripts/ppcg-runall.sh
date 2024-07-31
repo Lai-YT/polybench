@@ -57,6 +57,7 @@ cd "$BENCHCAT" \
             output=$(echo "$res" | sed -e "s/s//g")
             echo "$j $output" >> "$DATA_FILE"
           fi
+          rm ./transfo
         fi
       done
     fi
