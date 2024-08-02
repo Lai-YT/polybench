@@ -7,8 +7,8 @@ if [ $# -ne 3 ]; then
 fi
 
 ## Default value for the compilation line.
-if [ -z "$EXTRA_COMPILER_COMMAND" ]; then
-  EXTRA_COMPILER_COMMAND=""
+if [ -z "$COMPILER_COMMAND" ]; then
+  COMPILER_COMMAND="clang++ -O3 -lcudart -ldl -rt -pthread -lm -L/usr/local/cuda/lib64"
 fi
 
 PPCG_ROOT="$1"
@@ -27,38 +27,46 @@ cd "$BENCHCAT" \
       rm -f "$DATA_FILE"
       if [ -f "$i/compiler.opts" ]; then
         read comp_opts < $i/compiler.opts
-        COMPILER_F_COMMAND="$EXTRA_COMPILER_COMMAND $comp_opts"
+        COMPILER_F_COMMAND="$COMPILER_COMMAND $comp_opts"
       else
-        COMPILER_F_COMMAND="$EXTRA_COMPILER_COMMAND"
+        COMPILER_F_COMMAND="$COMPILER_COMMAND"
       fi
       for j in $(find "$i" -name "*.c"); do
         echo "Testing $j"
-        "$rootdir/scripts/ppcg-compile.sh" "$PPCG_ROOT" "$rootdir" "$COMPILER_F_COMMAND" "$j" "transfo" > /dev/null
+        # FIXME: comp_opts may contains things other than defines.
+        "$rootdir/scripts/ppcg-compile.sh" "$PPCG_ROOT" "$rootdir" "$comp_opts" "$j"
         if [ $? -ne 0 ]; then
-          echo "Problem when compiling $j"
+          echo "Problem when compiling $j with PPCG"
         else
-          val=$(./transfo)
+          CUDA_FILES=$(find "$i" -name "*.cu" | tr '\n' ' ')
+          echo "CUDA files: $CUDA_FILES"
+          "$rootdir/scripts/cuda-compile.sh" "$rootdir" "$COMPILER_F_COMMAND" "$CUDA_FILES" "transfo"
           if [ $? -ne 0 ]; then
-            echo "Problem when executing $j"
+            echo "Problem when compiling $CUDA_FILES"
           else
-            cnt=0
-            res=""
-            while [ $cnt -lt 5 ]; do
-              val=$(./transfo)
-              if [ $? -ne 0 ]; then
-                echo "Problem when executing $j"
-                res="-1"
-              else
-                echo "execution time: $val"
-                res="$res $val"
-              fi
-              cnt=$((cnt + 1))
-            done
-            output=$(echo "$res" | sed -e "s/s//g")
-            echo "$j $output" >> "$DATA_FILE"
+            val=$(./transfo)
+            if [ $? -ne 0 ]; then
+              echo "Problem when executing $j"
+            else
+              cnt=0
+              res=""
+              while [ $cnt -lt 5 ]; do
+                val=$(./transfo)
+                if [ $? -ne 0 ]; then
+                  echo "Problem when executing $j"
+                  res="-1"
+                else
+                  echo "execution time: $val"
+                  res="$res $val"
+                fi
+                cnt=$((cnt + 1))
+              done
+              output=$(echo "$res" | sed -e "s/s//g")
+              echo "$j $output" >> "$DATA_FILE"
+            fi
+            rm ./transfo
           fi
-          rm ./transfo
-        fi
+          fi
       done
     fi
   done
