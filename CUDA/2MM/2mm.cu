@@ -18,7 +18,9 @@
 #include "../../common/polybenchUtilFuncts.h"
 
 //define the error threshold for the results "not matching"
+#ifndef PERCENT_DIFF_ERROR_THRESHOLD
 #define PERCENT_DIFF_ERROR_THRESHOLD 0.05
+#endif
 
 #define GPU_DEVICE 0
 
@@ -33,7 +35,9 @@
 #define DIM_THREAD_BLOCK_Y 8
 
 /* Can switch DATA_TYPE between float and double */
-typedef float DATA_TYPE;
+#ifndef DATA_TYPE
+#define DATA_TYPE float
+#endif
 
 
 

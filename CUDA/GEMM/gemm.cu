@@ -21,7 +21,9 @@
 #define GPU_DEVICE 0
 
 //define the error threshold for the results "not matching"
+#ifndef PERCENT_DIFF_ERROR_THRESHOLD
 #define PERCENT_DIFF_ERROR_THRESHOLD 0.05
+#endif
 
 /* Problem size */
 #define NI 512
@@ -37,7 +39,9 @@
 #define BETA 2123.0f
 
 /* Can switch DATA_TYPE between float and double */
-typedef float DATA_TYPE;
+#ifndef DATA_TYPE
+#define DATA_TYPE float
+#endif
 
 
 
