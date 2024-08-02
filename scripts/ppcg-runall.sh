@@ -27,10 +27,10 @@ cd "$BENCHCAT" \
       rm -f "$DATA_FILE"
       if [ -f "$i/compiler.opts" ]; then
         read comp_opts < $i/compiler.opts
-        COMPILER_F_COMMAND="$COMPILER_COMMAND $comp_opts"
       else
-        COMPILER_F_COMMAND="$COMPILER_COMMAND"
+        comp_opts=""
       fi
+      COMPILER_F_COMMAND="$COMPILER_COMMAND $comp_opts"
       for j in $(find "$i" -name "*.c"); do
         echo "Testing $j"
         # FIXME: comp_opts may contains things other than defines.
