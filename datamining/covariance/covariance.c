@@ -10,8 +10,8 @@
 #ifndef M
 # define M 500
 #endif
-#ifndef N
-# define N 500
+#ifndef POLYBENCH_N
+# define POLYBENCH_N 500
 #endif
 
 /* Default data type is double. */
@@ -25,7 +25,7 @@
 /* Array declaration. Enable malloc if POLYBENCH_TEST_MALLOC. */
 DATA_TYPE float_n = 321414134.01;
 #ifndef POLYBENCH_TEST_MALLOC
-DATA_TYPE data[M + 1][N + 1];
+DATA_TYPE data[M + 1][POLYBENCH_N + 1];
 DATA_TYPE symmat[M + 1][M + 1];
 DATA_TYPE mean[M + 1];
 #else
@@ -36,7 +36,7 @@ DATA_TYPE* mean = (DATA_TYPE*)malloc((M + 1) * sizeof(DATA_TYPE));
   int i;
   for (i = 0; i <= M; ++i)
     {
-      data[i] = (DATA_TYPE*)malloc((N + 1) * sizeof(DATA_TYPE));
+      data[i] = (DATA_TYPE*)malloc((POLYBENCH_N + 1) * sizeof(DATA_TYPE));
       symmat[i] = (DATA_TYPE*)malloc((M + 1) * sizeof(DATA_TYPE));
     }
 }
@@ -48,7 +48,7 @@ void init_array()
   int i, j;
 
   for (i = 0; i <= M; i++)
-    for (j = 0; j <= N; j++)
+    for (j = 0; j <= POLYBENCH_N; j++)
       data[i][j] = ((DATA_TYPE) i*j) / (M+1);
 }
 
@@ -76,7 +76,7 @@ int main(int argc, char** argv)
 {
   int i, j, j1, j2;
   int m = M;
-  int n = N;
+  int n = POLYBENCH_N;
 
   /* Initialize array. */
   init_array();

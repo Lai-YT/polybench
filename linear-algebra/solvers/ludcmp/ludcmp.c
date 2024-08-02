@@ -7,8 +7,8 @@
 
 
 /* Default problem size. */
-#ifndef N
-# define N 1024
+#ifndef POLYBENCH_N
+# define POLYBENCH_N 1024
 #endif
 
 /* Default data type is double. */
@@ -22,19 +22,19 @@
 /* Array declaration. Enable malloc if POLYBENCH_TEST_MALLOC. */
 DATA_TYPE w;
 #ifndef POLYBENCH_TEST_MALLOC
-DATA_TYPE a[N+1][N+1];
-DATA_TYPE x[N+1];
-DATA_TYPE y[N+1];
-DATA_TYPE b[N+1];
+DATA_TYPE a[POLYBENCH_N+1][POLYBENCH_N+1];
+DATA_TYPE x[POLYBENCH_N+1];
+DATA_TYPE y[POLYBENCH_N+1];
+DATA_TYPE b[POLYBENCH_N+1];
 #else
-DATA_TYPE** a = (DATA_TYPE**)malloc((N + 1) * sizeof(DATA_TYPE*));
-DATA_TYPE* x = (DATA_TYPE*)malloc((N + 1) * sizeof(DATA_TYPE));
-DATA_TYPE* y = (DATA_TYPE*)malloc((N + 1) * sizeof(DATA_TYPE));
-DATA_TYPE* b = (DATA_TYPE*)malloc((N + 1) * sizeof(DATA_TYPE));
+DATA_TYPE** a = (DATA_TYPE**)malloc((POLYBENCH_N + 1) * sizeof(DATA_TYPE*));
+DATA_TYPE* x = (DATA_TYPE*)malloc((POLYBENCH_N + 1) * sizeof(DATA_TYPE));
+DATA_TYPE* y = (DATA_TYPE*)malloc((POLYBENCH_N + 1) * sizeof(DATA_TYPE));
+DATA_TYPE* b = (DATA_TYPE*)malloc((POLYBENCH_N + 1) * sizeof(DATA_TYPE));
 {
   int i;
-  for (i = 0; i <= N; ++i)
-    a[i] = (DATA_TYPE*)malloc((N + 1) * sizeof(DATA_TYPE));
+  for (i = 0; i <= POLYBENCH_N; ++i)
+    a[i] = (DATA_TYPE*)malloc((POLYBENCH_N + 1) * sizeof(DATA_TYPE));
 }
 #endif
 
@@ -43,12 +43,12 @@ void init_array()
 {
   int i, j;
 
-  for (i = 0; i <= N; i++)
+  for (i = 0; i <= POLYBENCH_N; i++)
     {
-      x[i] = ((DATA_TYPE) i + 1) / N;
-      b[i] = ((DATA_TYPE) i + 2) / N;
-      for (j = 0; j <= N; j++)
-	a[i][j] = ((DATA_TYPE) i*j + 1) / N;
+      x[i] = ((DATA_TYPE) i + 1) / POLYBENCH_N;
+      b[i] = ((DATA_TYPE) i + 2) / POLYBENCH_N;
+      for (j = 0; j <= POLYBENCH_N; j++)
+	a[i][j] = ((DATA_TYPE) i*j + 1) / POLYBENCH_N;
     }
 }
 
@@ -62,7 +62,7 @@ void print_array(int argc, char** argv)
   if (argc > 42 && ! strcmp(argv[0], ""))
 #endif
     {
-      for (i = 0; i <= N; i++) {
+      for (i = 0; i <= POLYBENCH_N; i++) {
 	fprintf(stderr, DATA_PRINTF_MODIFIER, x[i]);
 	if (i % 80 == 20) fprintf(stderr, "\n");
       }
@@ -74,7 +74,7 @@ void print_array(int argc, char** argv)
 int main(int argc, char** argv)
 {
   int i, j, k;
-  int n = N;
+  int n = POLYBENCH_N;
 
   /* Initialize array. */
   init_array();

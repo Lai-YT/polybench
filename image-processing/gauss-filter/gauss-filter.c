@@ -9,8 +9,8 @@
 #ifndef M
 # define M 1920
 #endif
-#ifndef N
-# define N 1080
+#ifndef POLYBENCH_N
+# define POLYBENCH_N 1080
 #endif
 #ifndef T
 # define T 1920
@@ -28,20 +28,20 @@
 #ifndef POLYBENCH_TEST_MALLOC
 DATA_TYPE tot[4];
 DATA_TYPE Gauss[4];
-DATA_TYPE g_tmp_image[N][M];
-DATA_TYPE g_acc1[N][M][4];
-DATA_TYPE g_acc2[N][M][4];
-DATA_TYPE in_image[N][M]; //input
-DATA_TYPE gauss_image[N][M]; //output
+DATA_TYPE g_tmp_image[POLYBENCH_N][M];
+DATA_TYPE g_acc1[POLYBENCH_N][M][4];
+DATA_TYPE g_acc2[POLYBENCH_N][M][4];
+DATA_TYPE in_image[POLYBENCH_N][M]; //input
+DATA_TYPE gauss_image[POLYBENCH_N][M]; //output
 #else
-DATA_TYPE** g_tmp_image = (DATA_TYPE**)malloc(N * sizeof(DATA_TYPE*));
-DATA_TYPE** in_image = (DATA_TYPE**)malloc(N * sizeof(DATA_TYPE*));
-DATA_TYPE** gauss_image = (DATA_TYPE**)malloc(N * sizeof(DATA_TYPE*));
-DATA_TYPE*** g_acc1 = (DATA_TYPE**)malloc(N * sizeof(DATA_TYPE**));
-DATA_TYPE*** g_acc2 = (DATA_TYPE**)malloc(N * sizeof(DATA_TYPE**));
+DATA_TYPE** g_tmp_image = (DATA_TYPE**)malloc(POLYBENCH_N * sizeof(DATA_TYPE*));
+DATA_TYPE** in_image = (DATA_TYPE**)malloc(POLYBENCH_N * sizeof(DATA_TYPE*));
+DATA_TYPE** gauss_image = (DATA_TYPE**)malloc(POLYBENCH_N * sizeof(DATA_TYPE*));
+DATA_TYPE*** g_acc1 = (DATA_TYPE**)malloc(POLYBENCH_N * sizeof(DATA_TYPE**));
+DATA_TYPE*** g_acc2 = (DATA_TYPE**)malloc(POLYBENCH_N * sizeof(DATA_TYPE**));
 {
   int i, j;
-  for (i = 0; i < N; ++i)
+  for (i = 0; i < POLYBENCH_N; ++i)
     {
       g_tmp_image[i] = (DATA_TYPE*)malloc(M * sizeof(DATA_TYPE));
       in_image[i] = (DATA_TYPE*)malloc(M * sizeof(DATA_TYPE));
@@ -62,7 +62,7 @@ void init_array()
 {
   int i, j;
 
-  for (i = 0; i < N; i++)
+  for (i = 0; i < POLYBENCH_N; i++)
     for (j = 0; j < M; j++)
       in_image[i][j] = ((DATA_TYPE) i*j) / M;
   for (i = 0; i < 4; i++)
@@ -79,10 +79,10 @@ void print_array(int argc, char** argv)
   if (argc > 42 && ! strcmp(argv[0], ""))
 #endif
     {
-      for (i = 0; i < N; i++)
+      for (i = 0; i < POLYBENCH_N; i++)
 	for (j = 0; j < M; j++) {
 	  fprintf(stderr, DATA_PRINTF_MODIFIER, gauss_image[i][j]);
-	  if ((i * N + j) % 80 == 20) fprintf(stderr, "\n");
+	  if ((i * POLYBENCH_N + j) % 80 == 20) fprintf(stderr, "\n");
 	}
       fprintf(stderr, "\n");
     }
@@ -94,7 +94,7 @@ int main(int argc, char** argv)
   int x, y, k;
   int t = T;
   int m = M;
-  int n = N;
+  int n = POLYBENCH_N;
 
   /* Initialize array. */
   init_array();

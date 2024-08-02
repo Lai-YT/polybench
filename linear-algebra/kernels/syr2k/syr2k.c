@@ -7,8 +7,8 @@
 
 
 /* Default problem size. */
-#ifndef N
-# define N 1024
+#ifndef POLYBENCH_N
+# define POLYBENCH_N 1024
 #endif
 #ifndef M
 # define M 1024
@@ -26,20 +26,20 @@
 DATA_TYPE alpha;
 DATA_TYPE beta;
 #ifndef POLYBENCH_TEST_MALLOC
-DATA_TYPE A[N][M];
-DATA_TYPE B[N][M];
-DATA_TYPE C[N][N];
+DATA_TYPE A[POLYBENCH_N][M];
+DATA_TYPE B[POLYBENCH_N][M];
+DATA_TYPE C[POLYBENCH_N][POLYBENCH_N];
 #else
-DATA_TYPE** A = (DATA_TYPE**)malloc(N * sizeof(DATA_TYPE*));
-DATA_TYPE** B = (DATA_TYPE**)malloc(N * sizeof(DATA_TYPE*));
-DATA_TYPE** C = (DATA_TYPE**)malloc(N * sizeof(DATA_TYPE*));
+DATA_TYPE** A = (DATA_TYPE**)malloc(POLYBENCH_N * sizeof(DATA_TYPE*));
+DATA_TYPE** B = (DATA_TYPE**)malloc(POLYBENCH_N * sizeof(DATA_TYPE*));
+DATA_TYPE** C = (DATA_TYPE**)malloc(POLYBENCH_N * sizeof(DATA_TYPE*));
 {
   int i;
-  for (i = 0; i < N; ++i)
+  for (i = 0; i < POLYBENCH_N; ++i)
     {
       A[i] = (DATA_TYPE*)malloc(M * sizeof(DATA_TYPE));
       B[i] = (DATA_TYPE*)malloc(M * sizeof(DATA_TYPE));
-      C[i] = (DATA_TYPE*)malloc(N * sizeof(DATA_TYPE));
+      C[i] = (DATA_TYPE*)malloc(POLYBENCH_N * sizeof(DATA_TYPE));
     }
 }
 #endif
@@ -51,14 +51,14 @@ void init_array()
 
   alpha = 12435;
   beta = 4546;
-  for (i = 0; i < N; i++)
+  for (i = 0; i < POLYBENCH_N; i++)
     {
-      for (j = 0; j < N; j++)
-	C[i][j] = ((DATA_TYPE) i*j + 2) / N;
+      for (j = 0; j < POLYBENCH_N; j++)
+	C[i][j] = ((DATA_TYPE) i*j + 2) / POLYBENCH_N;
       for (j = 0; j < M; j++)
 	{
-	  A[i][j] = ((DATA_TYPE) i*j) / N;
-	  B[i][j] = ((DATA_TYPE) i*j + 1) / N;
+	  A[i][j] = ((DATA_TYPE) i*j) / POLYBENCH_N;
+	  B[i][j] = ((DATA_TYPE) i*j + 1) / POLYBENCH_N;
 	}
     }
 }
@@ -73,10 +73,10 @@ void print_array(int argc, char** argv)
   if (argc > 42 && ! strcmp(argv[0], ""))
 #endif
     {
-      for (i = 0; i < N; i++)
-	for (j = 0; j < N; j++) {
+      for (i = 0; i < POLYBENCH_N; i++)
+	for (j = 0; j < POLYBENCH_N; j++) {
 	  fprintf(stderr, DATA_PRINTF_MODIFIER, C[i][j]);
-	if ((i * N + j) % 80 == 20) fprintf(stderr, "\n");
+	if ((i * POLYBENCH_N + j) % 80 == 20) fprintf(stderr, "\n");
       }
       fprintf(stderr, "\n");
     }
@@ -86,7 +86,7 @@ void print_array(int argc, char** argv)
 int main(int argc, char** argv)
 {
   int i, j, k;
-  int n = N;
+  int n = POLYBENCH_N;
   int m = M;
 
   /* Initialize array. */

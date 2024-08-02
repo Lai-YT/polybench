@@ -9,8 +9,8 @@
 #ifndef TSTEPS
 # define TSTEPS 10000
 #endif
-#ifndef N
-# define N 4096
+#ifndef POLYBENCH_N
+# define POLYBENCH_N 4096
 #endif
 
 /* Default data type is double. */
@@ -23,11 +23,11 @@
 
 /* Array declaration. Enable malloc if POLYBENCH_TEST_MALLOC. */
 #ifndef POLYBENCH_TEST_MALLOC
-DATA_TYPE A[N];
-DATA_TYPE B[N];
+DATA_TYPE A[POLYBENCH_N];
+DATA_TYPE B[POLYBENCH_N];
 #else
-DATA_TYPE* A = (DATA_TYPE**)malloc(N * sizeof(DATA_TYPE));
-DATA_TYPE* B = (DATA_TYPE**)malloc(N * sizeof(DATA_TYPE));
+DATA_TYPE* A = (DATA_TYPE**)malloc(POLYBENCH_N * sizeof(DATA_TYPE));
+DATA_TYPE* B = (DATA_TYPE**)malloc(POLYBENCH_N * sizeof(DATA_TYPE));
 #endif
 
 static inline
@@ -35,10 +35,10 @@ void init_array()
 {
   int i, j;
 
-  for (i = 0; i < N; i++)
+  for (i = 0; i < POLYBENCH_N; i++)
     {
-      A[i] = ((DATA_TYPE) 4 * i + 10) / N;
-      B[i] = ((DATA_TYPE) 7 * i + 11) / N;
+      A[i] = ((DATA_TYPE) 4 * i + 10) / POLYBENCH_N;
+      B[i] = ((DATA_TYPE) 7 * i + 11) / POLYBENCH_N;
     }
 }
 
@@ -52,7 +52,7 @@ void print_array(int argc, char** argv)
   if (argc > 42 && ! strcmp(argv[0], ""))
 #endif
     {
-      for (i = 0; i < N; i++) {
+      for (i = 0; i < POLYBENCH_N; i++) {
 	fprintf(stderr, DATA_PRINTF_MODIFIER, A[i]);
 	if (i % 80 == 20) fprintf(stderr, "\n");
       }
@@ -65,7 +65,7 @@ int main(int argc, char** argv)
 {
   int t, i, j;
   int tsteps = TSTEPS;
-  int n = N;
+  int n = POLYBENCH_N;
 
   /* Initialize array. */
   init_array();

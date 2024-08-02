@@ -7,8 +7,8 @@
 
 
 /* Default problem size. */
-#ifndef N
-# define N 4000
+#ifndef POLYBENCH_N
+# define POLYBENCH_N 4000
 #endif
 
 /* Default data type is double. */
@@ -18,21 +18,21 @@
 
 /* Array declaration. Enable malloc if POLYBENCH_TEST_MALLOC. */
 #ifndef POLYBENCH_TEST_MALLOC
-DATA_TYPE A[N][N];
-DATA_TYPE x1[N];
-DATA_TYPE y_1[N];
-DATA_TYPE x2[N];
-DATA_TYPE y_2[N];
+DATA_TYPE A[POLYBENCH_N][POLYBENCH_N];
+DATA_TYPE x1[POLYBENCH_N];
+DATA_TYPE y_1[POLYBENCH_N];
+DATA_TYPE x2[POLYBENCH_N];
+DATA_TYPE y_2[POLYBENCH_N];
 #else
-DATA_TYPE** A = (DATA_TYPE**)malloc(N * sizeof(DATA_TYPE*));
-DATA_TYPE* x1 = (DATA_TYPE*)malloc(N * sizeof(DATA_TYPE));
-DATA_TYPE* y_1 = (DATA_TYPE*)malloc(N * sizeof(DATA_TYPE));
-DATA_TYPE* x2 = (DATA_TYPE*)malloc(N * sizeof(DATA_TYPE));
-DATA_TYPE* y_2 = (DATA_TYPE*)malloc(N * sizeof(DATA_TYPE));
+DATA_TYPE** A = (DATA_TYPE**)malloc(POLYBENCH_N * sizeof(DATA_TYPE*));
+DATA_TYPE* x1 = (DATA_TYPE*)malloc(POLYBENCH_N * sizeof(DATA_TYPE));
+DATA_TYPE* y_1 = (DATA_TYPE*)malloc(POLYBENCH_N * sizeof(DATA_TYPE));
+DATA_TYPE* x2 = (DATA_TYPE*)malloc(POLYBENCH_N * sizeof(DATA_TYPE));
+DATA_TYPE* y_2 = (DATA_TYPE*)malloc(POLYBENCH_N * sizeof(DATA_TYPE));
 {
   int i;
-  for (i = 0; i < N; ++i)
-    A[i] = (DATA_TYPE*)malloc(N * sizeof(DATA_TYPE));
+  for (i = 0; i < POLYBENCH_N; ++i)
+    A[i] = (DATA_TYPE*)malloc(POLYBENCH_N * sizeof(DATA_TYPE));
 }
 #endif
 
@@ -41,14 +41,14 @@ void init_array()
 {
   int i, j;
 
-  for (i = 0; i < N; i++)
+  for (i = 0; i < POLYBENCH_N; i++)
     {
-      x1[i] = ((DATA_TYPE) i) / N;
-      x2[i] = ((DATA_TYPE) i + 1) / N;
-      y_1[i] = ((DATA_TYPE) i + 3) / N;
-      y_2[i] = ((DATA_TYPE) i + 4) / N;
-      for (j = 0; j < N; j++)
-	A[i][j] = ((DATA_TYPE) i*j) / N;
+      x1[i] = ((DATA_TYPE) i) / POLYBENCH_N;
+      x2[i] = ((DATA_TYPE) i + 1) / POLYBENCH_N;
+      y_1[i] = ((DATA_TYPE) i + 3) / POLYBENCH_N;
+      y_2[i] = ((DATA_TYPE) i + 4) / POLYBENCH_N;
+      for (j = 0; j < POLYBENCH_N; j++)
+	A[i][j] = ((DATA_TYPE) i*j) / POLYBENCH_N;
     }
 }
 
@@ -62,7 +62,7 @@ void print_array(int argc, char** argv)
   if (argc > 42 && ! strcmp(argv[0], ""))
 #endif
     {
-      for (i = 0; i < N; i++) {
+      for (i = 0; i < POLYBENCH_N; i++) {
 	fprintf(stderr, "%0.2lf ", x1[i]);
 	fprintf(stderr, "%0.2lf ", x2[i]);
 	if ((2 * i) % 80 == 20) fprintf(stderr, "\n");
@@ -75,7 +75,7 @@ void print_array(int argc, char** argv)
 int main(int argc, char** argv)
 {
   int i, j;
-  int n = N;
+  int n = POLYBENCH_N;
 
   /* Initialize array. */
   init_array();
