@@ -9,6 +9,7 @@ endif
 all:
 	$(CUDACXX) $(CUDAFLAGS) \
 		-O3 \
+		-DDATA_TYPE=double \
 		${CUFILES} -o ${EXECUTABLE} 
 clean:
 	rm -f *~ *.exe
