@@ -10,17 +10,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include <assert.h>
 #include <unistd.h>
 #include <sys/time.h>
 #include <cuda.h>
 
 #include "../../common/polybenchUtilFuncts.h"
-
-//define the error threshold for the results "not matching"
-#ifndef PERCENT_DIFF_ERROR_THRESHOLD
-#define PERCENT_DIFF_ERROR_THRESHOLD 1.05
-#endif
 
 #define GPU_DEVICE 0
 
@@ -51,7 +45,6 @@
 #endif
 
 
-
 void init_arrays(DATA_TYPE* data)
 {
 	int i, j;
@@ -65,71 +58,10 @@ void init_arrays(DATA_TYPE* data)
 	}
 }
 
-
-void covariance(DATA_TYPE* data, DATA_TYPE* symmat, DATA_TYPE* mean)
-{
-	int i, j, j1,j2;
-
-  	/* Determine mean of column vectors of input data matrix */
-	for (j = 1; j < (M+1); j++)
-	{
-		mean[j] = 0.0;
-		for (i = 1; i < (N+1); i++)
-		{
-        		mean[j] += data[i*(M+1) + j];
-		}
-		mean[j] /= FLOAT_N;
-	}
-
-  	/* Center the column vectors. */
-	for (i = 1; i < (N+1); i++)
-	{
-		for (j = 1; j < (M+1); j++)
-		{
-			data[i*(M+1) + j] -= mean[j];
-		}
-	}
-
-  	/* Calculate the m * m covariance matrix. */
-	for (j1 = 1; j1 < (M+1); j1++)
-	{
-		for (j2 = j1; j2 < (M+1); j2++)
-     		{
-       		symmat[j1*(M+1) + j2] = 0.0;
-			for (i = 1; i < N+1; i++)
-			{
-				symmat[j1*(M+1) + j2] += data[i*(M+1) + j1] * data[i*(M+1) + j2];
-			}
-        		symmat[j2*(M+1) + j1] = symmat[j1*(M+1) + j2];
-      		}
-	}
-}
-
-
-void compareResults(DATA_TYPE* symmat, DATA_TYPE* symmat_outputFromGpu)
-{
-	int i,j,fail;
-	fail = 0;
-
-	for (i=1; i < (M+1); i++)
-	{
-		for (j=1; j < (N+1); j++)
-		{
-			if (percentDiff(symmat[i*(N+1) + j], symmat_outputFromGpu[i*(N+1) + j]) > PERCENT_DIFF_ERROR_THRESHOLD)
-			{
-				fail++;
-			}			
-		}
-	}
-	printf("Non-Matching CPU-GPU Outputs Beyond Error Threshold of %4.2f Percent: %d\n", PERCENT_DIFF_ERROR_THRESHOLD, fail);
-}
-
-
 void GPU_argv_init()
 {
 	cudaDeviceProp deviceProp;
 	cudaGetDeviceProperties(&deviceProp, GPU_DEVICE);
-	printf("setting device %d with name %s\n",GPU_DEVICE,deviceProp.name);
 	cudaSetDevice( GPU_DEVICE );
 	
 	return;
@@ -186,10 +118,8 @@ __global__ void covar_kernel(DATA_TYPE *symmat, DATA_TYPE *data)
 }
 
 
-void covarianceCuda(DATA_TYPE* data, DATA_TYPE* symmat, DATA_TYPE* mean, DATA_TYPE* symmat_outputFromGpu)
+void covarianceCuda(DATA_TYPE* data, DATA_TYPE* symmat, DATA_TYPE* mean)
 {
-	double t_start, t_end;
-
 	DATA_TYPE *data_gpu;
 	DATA_TYPE *mean_gpu;
 	DATA_TYPE *symmat_gpu;
@@ -210,18 +140,16 @@ void covarianceCuda(DATA_TYPE* data, DATA_TYPE* symmat, DATA_TYPE* mean, DATA_TY
 	dim3 block3(DIM_THREAD_BLOCK_KERNEL_3_X, DIM_THREAD_BLOCK_KERNEL_3_Y);
 	dim3 grid3((size_t)(ceil((float)M) / ((float)DIM_THREAD_BLOCK_KERNEL_3_X)), 1);
 	
-	t_start = rtclock();
-
 	mean_kernel<<<grid1, block1>>>(mean_gpu,data_gpu);
 	cudaThreadSynchronize();
 	reduce_kernel<<<grid2, block2>>>(mean_gpu,data_gpu);
 	cudaThreadSynchronize();
 	covar_kernel<<<grid3, block3>>>(symmat_gpu,data_gpu);
 	cudaThreadSynchronize();
-	t_end = rtclock();
-	fprintf(stdout, "GPU Runtime: %0.6lfs\n", t_end - t_start);
 
-	cudaMemcpy(symmat_outputFromGpu, symmat_gpu, sizeof(DATA_TYPE) * (M+1) * (N+1), cudaMemcpyDeviceToHost);
+	cudaMemcpy(data, data_gpu, sizeof(DATA_TYPE) * (M+1) * (N+1), cudaMemcpyDeviceToHost);
+	cudaMemcpy(mean, mean_gpu, sizeof(DATA_TYPE) * (M+1), cudaMemcpyDeviceToHost);
+	cudaMemcpy(symmat, symmat_gpu, sizeof(DATA_TYPE) * (M+1) * (N+1), cudaMemcpyDeviceToHost);
 	
 	cudaFree(data_gpu);
 	cudaFree(symmat_gpu);
@@ -236,30 +164,25 @@ int main()
 	DATA_TYPE* data;
 	DATA_TYPE* symmat;
 	DATA_TYPE* mean;
-	DATA_TYPE* symmat_outputFromGpu;	
 
 	data = (DATA_TYPE*)malloc((M+1)*(N+1)*sizeof(DATA_TYPE));
 	symmat = (DATA_TYPE*)malloc((M+1)*(M+1)*sizeof(DATA_TYPE));
 	mean = (DATA_TYPE*)malloc((M+1)*sizeof(DATA_TYPE));
-	symmat_outputFromGpu = (DATA_TYPE*)malloc((M+1)*(M+1)*sizeof(DATA_TYPE));	
 
 	init_arrays(data);
     
 	GPU_argv_init();
 
-	covarianceCuda(data, symmat, mean, symmat_outputFromGpu);
-	
 	t_start = rtclock();
-	covariance(data, symmat, mean);
+	covarianceCuda(data, symmat, mean);
 	t_end = rtclock();
-	fprintf(stdout, "CPU Runtime: %0.6lfs\n", t_end - t_start);
-
-	compareResults(symmat, symmat_outputFromGpu);
+#ifdef POLYBENCH_TIME
+	fprintf(stdout, "%0.6lfs\n", t_end - t_start);
+#endif
 
 	free(data);
 	free(symmat);
 	free(mean);
-	free(symmat_outputFromGpu);	
 
   	return 0;
 }

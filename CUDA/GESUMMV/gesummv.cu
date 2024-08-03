@@ -9,19 +9,11 @@
 
 #include <unistd.h>
 #include <stdio.h>
-#include <time.h>
 #include <sys/time.h>
 #include <stdlib.h>
-#include <stdarg.h>
-#include <string.h>
 #include <cuda.h>
 
 #include "../../common/polybenchUtilFuncts.h"
-
-//define the error threshold for the results "not matching"
-#ifndef PERCENT_DIFF_ERROR_THRESHOLD
-#define PERCENT_DIFF_ERROR_THRESHOLD 0.05
-#endif
 
 #define GPU_DEVICE 0
 
@@ -42,26 +34,6 @@
 #endif
 
 
-
-void gesummv(DATA_TYPE *A, DATA_TYPE *B, DATA_TYPE *x, DATA_TYPE *y, DATA_TYPE *tmp)
-{
-	int i, j;
-	
-	for (i = 0; i < N; i++)
-	{
-		tmp[i] = 0;
-		y[i] = 0;
-		for (j = 0; j < N; j++)
-		{
-			tmp[i] = A[i*N + j] * x[j] + tmp[i];
-			y[i] = B[i*N + j] * x[j] + y[i];
-		}
-		
-		y[i] = ALPHA * tmp[i] + BETA * y[i];
-	}
-}
-
-
 void init(DATA_TYPE* A, DATA_TYPE* x)
 {
   	int i, j;
@@ -77,30 +49,10 @@ void init(DATA_TYPE* A, DATA_TYPE* x)
     }
 }
 
-
-void compareResults(DATA_TYPE* y, DATA_TYPE* y_outputFromGpu)
-{
-	int i, fail;
-	fail = 0;
-	
-	for (i=0; i<(N); i++) 
-	{
-		if (percentDiff(y[i], y_outputFromGpu[i]) > PERCENT_DIFF_ERROR_THRESHOLD) 
-		{
-			fail++;
-		}
-	}
-	
-	// Print results
-	printf("Non-Matching CPU-GPU Outputs Beyond Error Threshold of %4.2f Percent: %d\n", PERCENT_DIFF_ERROR_THRESHOLD, fail);
-}
-
-
 void GPU_argv_init()
 {
 	cudaDeviceProp deviceProp;
 	cudaGetDeviceProperties(&deviceProp, GPU_DEVICE);
-	printf("setting device %d with name %s\n",GPU_DEVICE,deviceProp.name);
 	cudaSetDevice( GPU_DEVICE );
 }
 
@@ -121,10 +73,8 @@ __global__ void gesummv_kernel(DATA_TYPE *a, DATA_TYPE *b, DATA_TYPE *x, DATA_TY
 	}
 }
 
-void gesummvCuda(DATA_TYPE* A, DATA_TYPE* B, DATA_TYPE* x, DATA_TYPE* y, DATA_TYPE* tmp, DATA_TYPE* y_outputFromGpu)
+void gesummvCuda(DATA_TYPE* A, DATA_TYPE* B, DATA_TYPE* x, DATA_TYPE* y, DATA_TYPE* tmp)
 {
-	double t_start, t_end;		
-
 	DATA_TYPE *A_gpu;
 	DATA_TYPE *B_gpu;
 	DATA_TYPE *x_gpu;
@@ -147,13 +97,17 @@ void gesummvCuda(DATA_TYPE* A, DATA_TYPE* B, DATA_TYPE* x, DATA_TYPE* y, DATA_TY
 	dim3 grid((unsigned int)ceil( ((float)N) / ((float)block.x) ), 1);
 
 
-	t_start = rtclock();
 	gesummv_kernel<<< grid, block>>>(A_gpu,B_gpu,x_gpu, y_gpu, tmp_gpu);
 	cudaThreadSynchronize();
-	t_end = rtclock();
-	cudaMemcpy(y_outputFromGpu, y_gpu, sizeof(DATA_TYPE) * N, cudaMemcpyDeviceToHost);
 
-	fprintf(stdout, "GPU Runtime: %0.6lfs\n", t_end - t_start);
+	cudaMemcpy(tmp, tmp_gpu, sizeof(DATA_TYPE) * N, cudaMemcpyDeviceToHost);
+	cudaMemcpy(y, y_gpu, sizeof(DATA_TYPE) * N, cudaMemcpyDeviceToHost);
+
+	cudaFree(A_gpu);
+	cudaFree(B_gpu);
+	cudaFree(x_gpu);
+	cudaFree(y_gpu);
+	cudaFree(tmp_gpu);
 }
 
 
@@ -165,33 +119,29 @@ int main(int argc, char *argv[])
 	DATA_TYPE* B;  
 	DATA_TYPE* x;  
 	DATA_TYPE* y;
-	DATA_TYPE* y_outputFromGpu;
 	DATA_TYPE* tmp;
 	
 	A = (DATA_TYPE*)malloc(N*N*sizeof(DATA_TYPE));
 	B = (DATA_TYPE*)malloc(N*N*sizeof(DATA_TYPE));
 	x = (DATA_TYPE*)malloc(N*sizeof(DATA_TYPE)); 
 	y = (DATA_TYPE*)malloc(N*sizeof(DATA_TYPE));
-	y_outputFromGpu = (DATA_TYPE*)malloc(N*sizeof(DATA_TYPE));
 	tmp = (DATA_TYPE*)malloc(N*sizeof(DATA_TYPE));
 
 	init(A, x);
 	
 	GPU_argv_init();
-	gesummvCuda(A, B, x, y, tmp, y_outputFromGpu);
 	
 	t_start = rtclock();
-	gesummv(A, B, x, y, tmp);
+	gesummvCuda(A, B, x, y, tmp);
 	t_end = rtclock();
-	fprintf(stdout, "CPU Runtime: %0.6lfs\n", t_end - t_start);
+#ifdef POLYBENCH_TIME
+	fprintf(stdout, "%0.6lfs\n", t_end - t_start);
+#endif
 	
-	compareResults(y, y_outputFromGpu);
-
 	free(A);
 	free(B);  
 	free(x);  
 	free(y);
-	free(y_outputFromGpu);
 	free(tmp);
 
 	return 0;

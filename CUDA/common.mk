@@ -9,7 +9,7 @@ endif
 all:
 	$(CUDACXX) $(CUDAFLAGS) \
 		-O3 \
-		-DDATA_TYPE=double \
+		-DDATA_TYPE=double -DPOLYBENCH_TIME \
 		${CUFILES} -o ${EXECUTABLE} 
 clean:
 	rm -f *~ *.exe

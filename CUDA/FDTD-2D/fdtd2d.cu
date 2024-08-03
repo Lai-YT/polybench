@@ -10,17 +10,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include <assert.h>
 #include <unistd.h>
 #include <sys/time.h>
 #include <cuda.h>
 
 #include "../../common/polybenchUtilFuncts.h"
-
-//define the error threshold for the results "not matching"
-#ifndef PERCENT_DIFF_ERROR_THRESHOLD
-#define PERCENT_DIFF_ERROR_THRESHOLD 10.05
-#endif
 
 #define GPU_DEVICE 0
 
@@ -37,7 +31,6 @@
 #ifndef DATA_TYPE
 #define DATA_TYPE float
 #endif
-
 
 
 void init_arrays(DATA_TYPE* _fict_, DATA_TYPE* ex, DATA_TYPE* ey, DATA_TYPE* hz)
@@ -60,71 +53,10 @@ void init_arrays(DATA_TYPE* _fict_, DATA_TYPE* ex, DATA_TYPE* ey, DATA_TYPE* hz)
 	}
 }
 
-
-void runFdtd(DATA_TYPE* _fict_, DATA_TYPE* ex, DATA_TYPE* ey, DATA_TYPE* hz)
-{
-	int t, i, j;
-	
-	for (t=0; t < tmax; t++)  
-	{
-		for (j=0; j < NY; j++)
-		{
-			ey[0*NY + j] = _fict_[t];
-		}
-	
-		for (i = 1; i < NX; i++)
-		{
-       		for (j = 0; j < NY; j++)
-			{
-       			ey[i*NY + j] = ey[i*NY + j] - 0.5*(hz[i*NY + j] - hz[(i-1)*NY + j]);
-        		}
-		}
-
-		for (i = 0; i < NX; i++)
-		{
-       		for (j = 1; j < NY; j++)
-			{
-				ex[i*(NY+1) + j] = ex[i*(NY+1) + j] - 0.5*(hz[i*NY + j] - hz[i*NY + (j-1)]);
-			}
-		}
-
-		for (i = 0; i < NX; i++)
-		{
-			for (j = 0; j < NY; j++)
-			{
-				hz[i*NY + j] = hz[i*NY + j] - 0.7*(ex[i*(NY+1) + (j+1)] - ex[i*(NY+1) + j] + ey[(i+1)*NY + j] - ey[i*NY + j]);
-			}
-		}
-	}
-}
-
-
-void compareResults(DATA_TYPE* hz1, DATA_TYPE* hz2)
-{
-	int i, j, fail;
-	fail = 0;
-	
-	for (i=0; i < NX; i++) 
-	{
-		for (j=0; j < NY; j++) 
-		{
-			if (percentDiff(hz1[i*NY + j], hz2[i*NY + j]) > PERCENT_DIFF_ERROR_THRESHOLD) 
-			{
-				fail++;
-			}
-		}
-	}
-	
-	// Print results
-	printf("Non-Matching CPU-GPU Outputs Beyond Error Threshold of %4.2f Percent: %d\n", PERCENT_DIFF_ERROR_THRESHOLD, fail);
-}
-
-
 void GPU_argv_init()
 {
 	cudaDeviceProp deviceProp;
 	cudaGetDeviceProperties(&deviceProp, GPU_DEVICE);
-	printf("setting device %d with name %s\n",GPU_DEVICE,deviceProp.name);
 	cudaSetDevice( GPU_DEVICE );
 }
 
@@ -174,10 +106,8 @@ __global__ void fdtd_step3_kernel(DATA_TYPE *ex, DATA_TYPE *ey, DATA_TYPE *hz, i
 }
 
 
-void fdtdCuda(DATA_TYPE* _fict_, DATA_TYPE* ex, DATA_TYPE* ey, DATA_TYPE* hz, DATA_TYPE* hz_outputFromGpu)
+void fdtdCuda(DATA_TYPE* _fict_, DATA_TYPE* ex, DATA_TYPE* ey, DATA_TYPE* hz)
 {
-	double t_start, t_end;
-
 	DATA_TYPE *_fict_gpu;
 	DATA_TYPE *ex_gpu;
 	DATA_TYPE *ey_gpu;
@@ -196,7 +126,6 @@ void fdtdCuda(DATA_TYPE* _fict_, DATA_TYPE* ex, DATA_TYPE* ey, DATA_TYPE* hz, DA
 	dim3 block(DIM_THREAD_BLOCK_X, DIM_THREAD_BLOCK_Y);
 	dim3 grid( (size_t)ceil(((float)NY) / ((float)block.x)), (size_t)ceil(((float)NX) / ((float)block.y)));
 
-	t_start = rtclock();
 
 	for(int t = 0; t< tmax; t++)
 	{
@@ -208,10 +137,9 @@ void fdtdCuda(DATA_TYPE* _fict_, DATA_TYPE* ex, DATA_TYPE* ey, DATA_TYPE* hz, DA
 		cudaThreadSynchronize();
 	}
 	
-	t_end = rtclock();
-    	fprintf(stdout, "GPU Runtime: %0.6lfs\n", t_end - t_start);
-
-	cudaMemcpy(hz_outputFromGpu, hz_gpu, sizeof(DATA_TYPE) * NX * NY, cudaMemcpyDeviceToHost);	
+	cudaMemcpy(ex, ex_gpu, sizeof(DATA_TYPE) * NX * (NY + 1), cudaMemcpyDeviceToHost);
+	cudaMemcpy(ey, ey_gpu, sizeof(DATA_TYPE) * (NX + 1) * NY, cudaMemcpyDeviceToHost);
+	cudaMemcpy(hz, hz_gpu, sizeof(DATA_TYPE) * NX * NY, cudaMemcpyDeviceToHost);	
 		
 	cudaFree(_fict_gpu);
 	cudaFree(ex_gpu);
@@ -228,32 +156,28 @@ int main()
 	DATA_TYPE* ex;
 	DATA_TYPE* ey;
 	DATA_TYPE* hz;
-	DATA_TYPE* hz_outputFromGpu;
 
 	_fict_ = (DATA_TYPE*)malloc(tmax*sizeof(DATA_TYPE));
 	ex = (DATA_TYPE*)malloc(NX*(NY+1)*sizeof(DATA_TYPE));
 	ey = (DATA_TYPE*)malloc((NX+1)*NY*sizeof(DATA_TYPE));
 	hz = (DATA_TYPE*)malloc(NX*NY*sizeof(DATA_TYPE));
-	hz_outputFromGpu = (DATA_TYPE*)malloc(NX*NY*sizeof(DATA_TYPE));
 
 	init_arrays(_fict_, ex, ey, hz);
 
 	GPU_argv_init();
-	fdtdCuda(_fict_, ex, ey, hz, hz_outputFromGpu);
 
 	t_start = rtclock();
-	runFdtd(_fict_, ex, ey, hz);
+	fdtdCuda(_fict_, ex, ey, hz);
 	t_end = rtclock();
 	
-	fprintf(stdout, "CPU Runtime: %0.6lfs\n", t_end - t_start);
+#ifdef POLYBENCH_TIME
+	fprintf(stdout, "%0.6lfs\n", t_end - t_start);
+#endif
 	
-	compareResults(hz, hz_outputFromGpu);
-
 	free(_fict_);
 	free(ex);
 	free(ey);
 	free(hz);
-	free(hz_outputFromGpu);
 
 	return 0;
 }

@@ -12,16 +12,10 @@
 #include <time.h>
 #include <sys/time.h>
 #include <stdlib.h>
-#include <stdarg.h>
 #include <string.h>
 #include <cuda.h>
 
 #include "../../common/polybenchUtilFuncts.h"
-
-//define the error threshold for the results "not matching"
-#ifndef PERCENT_DIFF_ERROR_THRESHOLD
-#define PERCENT_DIFF_ERROR_THRESHOLD 0.05
-#endif
 
 #define GPU_DEVICE 0
 
@@ -39,41 +33,6 @@
 #endif
 
 
-
-void gramschmidt(DATA_TYPE* A, DATA_TYPE* R, DATA_TYPE* Q)
-{
-	int i,j,k;
-	DATA_TYPE nrm;
-	for (k = 0; k < N; k++)
-	{
-		nrm = 0;
-		for (i = 0; i < M; i++)
-		{
-			nrm += A[i*N + k] * A[i*N + k];
-		}
-		
-		R[k*N + k] = sqrt(nrm);
-		for (i = 0; i < M; i++)
-		{
-			Q[i*N + k] = A[i*N + k] / R[k*N + k];
-		}
-		
-		for (j = k + 1; j < N; j++)
-		{
-			R[k*N + j] = 0;
-			for (i = 0; i < M; i++)
-			{
-				R[k*N + j] += Q[i*N + k] * A[i*N + j];
-			}
-			for (i = 0; i < M; i++)
-			{
-				A[i*N + j] = A[i*N + j] - Q[i*N + k] * R[k*N + j];
-			}
-		}
-	}
-}
-
-
 void init_array(DATA_TYPE* A)
 {
 	int i, j;
@@ -87,34 +46,10 @@ void init_array(DATA_TYPE* A)
 	}
 }
 
-
-void compareResults(DATA_TYPE* A, DATA_TYPE* A_outputFromGpu)
-{
-	int i, j, fail;
-	fail = 0;
-
-	for (i=0; i < M; i++) 
-	{
-		for (j=0; j < N; j++) 
-		{
-			if (percentDiff(A[i*N + j], A_outputFromGpu[i*N + j]) > PERCENT_DIFF_ERROR_THRESHOLD) 
-			{				
-				fail++;
-				printf("i: %d j: %d \n1: %f\n 2: %f\n", i, j, A[i*N + j], A_outputFromGpu[i*N + j]);
-			}
-		}
-	}
-	
-	// Print results
-	printf("Non-Matching CPU-GPU Outputs Beyond Error Threshold of %4.2f Percent: %d\n", PERCENT_DIFF_ERROR_THRESHOLD, fail);
-}
-
-
 void GPU_argv_init()
 {
 	cudaDeviceProp deviceProp;
 	cudaGetDeviceProperties(&deviceProp, GPU_DEVICE);
-	printf("setting device %d with name %s\n",GPU_DEVICE,deviceProp.name);
 	cudaSetDevice( GPU_DEVICE );	
 	return;
 }
@@ -170,10 +105,8 @@ __global__ void gramschmidt_kernel3(DATA_TYPE *a, DATA_TYPE *r, DATA_TYPE *q, in
 }
 
 
-void gramschmidtCuda(DATA_TYPE* A, DATA_TYPE* R, DATA_TYPE* Q, DATA_TYPE* A_outputFromGpu)
+void gramschmidtCuda(DATA_TYPE* A, DATA_TYPE* R, DATA_TYPE* Q)
 {
-	double t_start, t_end;
-
 	dim3 block(DIM_THREAD_BLOCK_X, DIM_THREAD_BLOCK_Y);
 	dim3 gridKernel1(1, 1);
 	dim3 gridKernel2((size_t)ceil(((float)N) / ((float)DIM_THREAD_BLOCK_X)), 1);
@@ -188,7 +121,6 @@ void gramschmidtCuda(DATA_TYPE* A, DATA_TYPE* R, DATA_TYPE* Q, DATA_TYPE* A_outp
 	cudaMalloc((void **)&Q_gpu, sizeof(DATA_TYPE) * M * N);
 	cudaMemcpy(A_gpu, A, sizeof(DATA_TYPE) * M * N, cudaMemcpyHostToDevice);
 	
-	t_start = rtclock();
 	int k;
 	for (k = 0; k < N; k++)
 	{
@@ -199,10 +131,10 @@ void gramschmidtCuda(DATA_TYPE* A, DATA_TYPE* R, DATA_TYPE* Q, DATA_TYPE* A_outp
 		gramschmidt_kernel3<<<gridKernel3,block>>>(A_gpu, R_gpu, Q_gpu, k);
 		cudaThreadSynchronize();
 	}
-	t_end = rtclock();
-	fprintf(stdout, "GPU Runtime: %0.6lfs\n", t_end - t_start);
 	
-	cudaMemcpy(A_outputFromGpu, A_gpu, sizeof(DATA_TYPE) * M * N, cudaMemcpyDeviceToHost);    
+	cudaMemcpy(A, A_gpu, sizeof(DATA_TYPE) * M * N, cudaMemcpyDeviceToHost);    
+	cudaMemcpy(R, R_gpu, sizeof(DATA_TYPE) * M * N, cudaMemcpyDeviceToHost);
+	cudaMemcpy(Q, Q_gpu, sizeof(DATA_TYPE) * M * N, cudaMemcpyDeviceToHost);
 
 	cudaFree(A_gpu);
 	cudaFree(R_gpu);
@@ -215,30 +147,26 @@ int main(int argc, char *argv[])
 	double t_start, t_end;
 
 	DATA_TYPE* A;
-	DATA_TYPE* A_outputFromGpu;
 	DATA_TYPE* R;
 	DATA_TYPE* Q;
 	
 	A = (DATA_TYPE*)malloc(M*N*sizeof(DATA_TYPE));
-	A_outputFromGpu = (DATA_TYPE*)malloc(M*N*sizeof(DATA_TYPE));
 	R = (DATA_TYPE*)malloc(M*N*sizeof(DATA_TYPE));  
 	Q = (DATA_TYPE*)malloc(M*N*sizeof(DATA_TYPE));  
 	
 	init_array(A);
 	
 	GPU_argv_init();
-	gramschmidtCuda(A, R, Q, A_outputFromGpu);
 	
 	t_start = rtclock();
-	gramschmidt(A, R, Q);
+	gramschmidtCuda(A, R, Q);
 	t_end = rtclock();
 
-	fprintf(stdout, "CPU Runtime: %0.6lfs\n", t_end - t_start);
-	
-	compareResults(A, A_outputFromGpu);
+#ifdef POLYBENCH_TIME
+	fprintf(stdout, "%0.6lfs\n", t_end - t_start);
+#endif
 	
 	free(A);
-	free(A_outputFromGpu);
 	free(R);
 	free(Q);  
 

@@ -10,17 +10,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include <assert.h>
 #include <unistd.h>
 #include <sys/time.h>
 #include <cuda.h>
 
 #include "../../common/polybenchUtilFuncts.h"
-
-//define the error threshold for the results "not matching"
-#ifndef PERCENT_DIFF_ERROR_THRESHOLD
-#define PERCENT_DIFF_ERROR_THRESHOLD 0.05
-#endif
 
 #define GPU_DEVICE 0
 
@@ -42,7 +36,6 @@
 #endif
 
 
-
 void init_arrays(DATA_TYPE* A, DATA_TYPE* C)
 {
 	int i, j;
@@ -62,59 +55,10 @@ void init_arrays(DATA_TYPE* A, DATA_TYPE* C)
 }
 
 
-void syrk(DATA_TYPE* A, DATA_TYPE* C)
-{
-	int i, j, k;
-	
-	/*  C := alpha*A*A' + beta*C */
-	for (i = 0; i < N; i++)
-	{
-		for (j = 0; j < N; j++)
-		{
-			C[i*M + j] *= beta;
-		}
-	}
-	
-	for (i = 0; i < N; i++)
-	{
-		for (j = 0; j < N; j++)
-		{
-			for (k = 0; k < M; k++)
-			{
-				C[i*N + j] += alpha * A[i*M + k] * A[j*M + k];
-			}
-		}
-	}
-}
-
-
-void compareResults(DATA_TYPE* C, DATA_TYPE* C_outputFromGpu)
-{
-	int i,j,fail;
-	fail = 0;
-
-	// Compare C with D
-	for (i=0; i<N; i++)
-	{
-		for (j=0; j<M; j++)
-		{
-			if (percentDiff(C[i*M + j], C_outputFromGpu[i*M + j]) > PERCENT_DIFF_ERROR_THRESHOLD)
-			{
-				fail++;
-			}
-		}
-	}
-	
-	// print results
-	printf("Non-Matching CPU-GPU Outputs Beyond Error Threshold of %4.2f Percent: %d\n", PERCENT_DIFF_ERROR_THRESHOLD, fail);
-}
-
-
 void GPU_argv_init()
 {
 	cudaDeviceProp deviceProp;
 	cudaGetDeviceProperties(&deviceProp, GPU_DEVICE);
-	printf("setting device %d with name %s\n",GPU_DEVICE,deviceProp.name);
 	cudaSetDevice( GPU_DEVICE );
 	
 	return;
@@ -139,10 +83,8 @@ __global__ void syrk_kernel(DATA_TYPE ALPHA, DATA_TYPE BETA, DATA_TYPE *a, DATA_
 }
 
 
-void syrkCuda(DATA_TYPE* A, DATA_TYPE* C, DATA_TYPE* C_outputFromGpu)
+void syrkCuda(DATA_TYPE* A, DATA_TYPE* C)
 {
-	double t_start, t_end;
-
 	DATA_TYPE* A_gpu;
 	DATA_TYPE* C_gpu;
 
@@ -153,13 +95,10 @@ void syrkCuda(DATA_TYPE* A, DATA_TYPE* C, DATA_TYPE* C_outputFromGpu)
 	
 	dim3 block(DIM_THREAD_BLOCK_X, DIM_THREAD_BLOCK_Y);
 	dim3 grid((size_t)(ceil(((float)N) / ((float)DIM_THREAD_BLOCK_X))), (size_t)ceil(((float)N) / ((float)DIM_THREAD_BLOCK_Y)));
-	t_start = rtclock();
 	syrk_kernel<<<grid,block>>>(alpha, beta, A_gpu,C_gpu);
 	cudaThreadSynchronize();
-	t_end = rtclock();
-	fprintf(stdout, "GPU Runtime: %0.6lfs\n", t_end - t_start);
 
-	cudaMemcpy(C_outputFromGpu, C_gpu, sizeof(DATA_TYPE) * N * N, cudaMemcpyDeviceToHost);
+	cudaMemcpy(C, C_gpu, sizeof(DATA_TYPE) * N * N, cudaMemcpyDeviceToHost);
 
 	cudaFree(A_gpu);
 	cudaFree(C_gpu);
@@ -172,27 +111,24 @@ int main()
 
 	DATA_TYPE* A;
 	DATA_TYPE* C;
-	DATA_TYPE* C_outputFromGpu;
 
 	A = (DATA_TYPE*)malloc(N*M*sizeof(DATA_TYPE));
 	C = (DATA_TYPE*)malloc(N*M*sizeof(DATA_TYPE));
-	C_outputFromGpu = (DATA_TYPE*)malloc(N*M*sizeof(DATA_TYPE));
 
 	init_arrays(A, C);
 	
 	GPU_argv_init();	
-	syrkCuda(A, C, C_outputFromGpu);
 
 	t_start = rtclock();
-	syrk(A, C);
+	syrkCuda(A, C);
 	t_end = rtclock();
-	fprintf(stdout, "CPU Runtime: %0.6lfs\n", t_end - t_start);
 
-	compareResults(C, C_outputFromGpu);
+#ifdef POLYBENCH_TIME
+	fprintf(stdout, "%0.6lfs\n", t_end - t_start);
+#endif
 
 	free(A);
 	free(C);
-	free(C_outputFromGpu);
 
 	return 0;
 }

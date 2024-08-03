@@ -10,16 +10,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include <assert.h>
 #include <sys/time.h>
 #include <cuda.h>
 
 #include "../../common/polybenchUtilFuncts.h"
-
-//Error threshold for the results "not matching"
-#ifndef PERCENT_DIFF_ERROR_THRESHOLD
-#define PERCENT_DIFF_ERROR_THRESHOLD 0.5
-#endif
 
 #define GPU_DEVICE 0
 
@@ -31,15 +25,10 @@
 #define DIM_THREAD_BLOCK_X 256
 #define DIM_THREAD_BLOCK_Y 1
 
-#ifndef M_PI
-#define M_PI 3.14159
-#endif
-
 /* Can switch DATA_TYPE between float and double */
 #ifndef DATA_TYPE
 #define DATA_TYPE float
 #endif
-
 
 
 void init_array(DATA_TYPE *A, DATA_TYPE *p, DATA_TYPE *r)
@@ -62,39 +51,10 @@ void init_array(DATA_TYPE *A, DATA_TYPE *p, DATA_TYPE *r)
 	}
 }
 
-
-void compareResults(DATA_TYPE* s, DATA_TYPE* s_outputFromGpu, DATA_TYPE* q, DATA_TYPE* q_outputFromGpu)
-{
-	int i,fail;
-	fail = 0;
-
-	// Compare s with s_cuda
-	for (i=0; i<NX; i++)
-	{
-		if (percentDiff(q[i], q_outputFromGpu[i]) > PERCENT_DIFF_ERROR_THRESHOLD)
-		{
-			fail++;
-		}
-	}
-
-	for (i=0; i<NY; i++)
-	{
-		if (percentDiff(s[i], s_outputFromGpu[i]) > PERCENT_DIFF_ERROR_THRESHOLD)
-		{
-			fail++;
-		}		
-	}
-	
-	// print results
-	printf("Non-Matching CPU-GPU Outputs Beyond Error Threshold of %4.2f Percent: %d\n", PERCENT_DIFF_ERROR_THRESHOLD, fail);
-}
-
-
 void GPU_argv_init()
 {
 	cudaDeviceProp deviceProp;
 	cudaGetDeviceProperties(&deviceProp, GPU_DEVICE);
-	printf("setting device %d with name %s\n",GPU_DEVICE,deviceProp.name);
 	cudaSetDevice( GPU_DEVICE );
 }
 
@@ -134,33 +94,8 @@ __global__ void bicg_kernel2(DATA_TYPE *A, DATA_TYPE *p, DATA_TYPE *q)
 	}
 }
 
-
-void bicg_cpu(DATA_TYPE* A, DATA_TYPE* r, DATA_TYPE* s, DATA_TYPE* p, DATA_TYPE* q)
+void bicgCuda(DATA_TYPE* A, DATA_TYPE* r, DATA_TYPE* s, DATA_TYPE* p, DATA_TYPE* q)
 {
-	int i,j;
-	
-  	for (i = 0; i < NY; i++)
-	{
-		s[i] = 0.0;
-	}
-
-    for (i = 0; i < NX; i++)
-    {
-		q[i] = 0.0;
-		for (j = 0; j < NY; j++)
-	  	{
-	    		s[j] = s[j] + r[i] * A[i*NY + j];
-	    		q[i] = q[i] + A[i*NY + j] * p[j];
-	  	}
-	}
-}
-
-
-void bicgCuda(DATA_TYPE* A, DATA_TYPE* r, DATA_TYPE* s, DATA_TYPE* p, DATA_TYPE* q,
-			DATA_TYPE* s_outputFromGpu, DATA_TYPE* q_outputFromGpu)
-{
-	double t_start, t_end;
-
 	DATA_TYPE *A_gpu;
 	DATA_TYPE *q_gpu;
 	DATA_TYPE *p_gpu;
@@ -182,16 +117,13 @@ void bicgCuda(DATA_TYPE* A, DATA_TYPE* r, DATA_TYPE* s, DATA_TYPE* p, DATA_TYPE*
 	dim3 grid1((size_t)(ceil( ((float)NY) / ((float)block.x) )), 1);
 	dim3 grid2((size_t)(ceil( ((float)NX) / ((float)block.x) )), 1);
 
-	t_start = rtclock();
 	bicg_kernel1<<< grid1, block >>>(A_gpu, r_gpu, s_gpu);
 	cudaThreadSynchronize();
 	bicg_kernel2<<< grid2, block >>>(A_gpu, p_gpu, q_gpu);
 	cudaThreadSynchronize();
-	t_end = rtclock();
-	fprintf(stdout, "GPU Runtime: %0.6lfs\n", t_end - t_start);
 	
-	cudaMemcpy(s_outputFromGpu, s_gpu, sizeof(DATA_TYPE) * NY, cudaMemcpyDeviceToHost);
-	cudaMemcpy(q_outputFromGpu, q_gpu, sizeof(DATA_TYPE) * NX, cudaMemcpyDeviceToHost);
+	cudaMemcpy(s, s_gpu, sizeof(DATA_TYPE) * NY, cudaMemcpyDeviceToHost);
+	cudaMemcpy(q, q_gpu, sizeof(DATA_TYPE) * NX, cudaMemcpyDeviceToHost);
 
 	cudaFree(A_gpu);
 	cudaFree(r_gpu);
@@ -210,38 +142,30 @@ int main(int argc, char** argv)
 	DATA_TYPE* s;
 	DATA_TYPE* p;
 	DATA_TYPE* q;
-	DATA_TYPE* s_outputFromGpu;
-	DATA_TYPE* q_outputFromGpu;
  	
 	A = (DATA_TYPE*)malloc(NX*NY*sizeof(DATA_TYPE));
 	r = (DATA_TYPE*)malloc(NX*sizeof(DATA_TYPE));
 	s = (DATA_TYPE*)malloc(NY*sizeof(DATA_TYPE));
 	p = (DATA_TYPE*)malloc(NY*sizeof(DATA_TYPE));
 	q = (DATA_TYPE*)malloc(NX*sizeof(DATA_TYPE));
-	s_outputFromGpu = (DATA_TYPE*)malloc(NY*sizeof(DATA_TYPE));
-	q_outputFromGpu = (DATA_TYPE*)malloc(NX*sizeof(DATA_TYPE));
 
 	init_array(A, p, r);
 
 	GPU_argv_init();
 
-	bicgCuda(A, r, s, p, q, s_outputFromGpu, q_outputFromGpu);
-
 	t_start = rtclock();
-	bicg_cpu(A, r, s, p, q);
+	bicgCuda(A, r, s, p, q);
 	t_end = rtclock();
 
-	fprintf(stdout, "CPU Runtime: %0.6lfs\n", t_end - t_start);
-
-	compareResults(s, s_outputFromGpu, q, q_outputFromGpu);
+#ifdef POLYBENCH_TIME
+	fprintf(stdout, "%0.6lfs\n", t_end - t_start);
+#endif
 
 	free(A);
 	free(r);
 	free(s);
 	free(p);
 	free(q);
-	free(s_outputFromGpu);
-	free(q_outputFromGpu);
 
   	return 0;
 }

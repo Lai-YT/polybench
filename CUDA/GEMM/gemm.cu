@@ -12,18 +12,12 @@
 #include <time.h>
 #include <sys/time.h>
 #include <stdlib.h>
-#include <stdarg.h>
 #include <string.h>
 #include <cuda.h>
 
 #include "../../common/polybenchUtilFuncts.h"
 
 #define GPU_DEVICE 0
-
-//define the error threshold for the results "not matching"
-#ifndef PERCENT_DIFF_ERROR_THRESHOLD
-#define PERCENT_DIFF_ERROR_THRESHOLD 0.05
-#endif
 
 /* Problem size */
 #define NI 512
@@ -42,26 +36,6 @@
 #ifndef DATA_TYPE
 #define DATA_TYPE float
 #endif
-
-
-
-void gemm(DATA_TYPE *A, DATA_TYPE *B, DATA_TYPE *C)
-{
-	int i,j,k;
-	
-	for (i = 0; i < NI; i++)
-	{
-    	for (j = 0; j < NJ; j++)
-    	{
-			C[i*NJ + j] *= BETA;
-	
-			for (k = 0; k < NK; ++k)
-			{
-	  			C[i*NJ + j] += ALPHA * A[i*NK + k] * B[k*NJ + j];
-			}
-      	}
-	}
-}
 
 
 void init(DATA_TYPE *A, DATA_TYPE *B, DATA_TYPE *C)
@@ -93,34 +67,10 @@ void init(DATA_TYPE *A, DATA_TYPE *B, DATA_TYPE *C)
 	}
 }
 
-
-void compareResults(DATA_TYPE* C, DATA_TYPE* C_outputFromGpu)
-{
-	int i, j, fail;
-	fail = 0;
-	
-	// Compare C1 and C2
-	for (i=0; i < NI; i++) 
-	{
-		for (j=0; j < NJ; j++) 
-		{
-			if (percentDiff(C[i*NJ + j], C_outputFromGpu[i*NJ + j]) > PERCENT_DIFF_ERROR_THRESHOLD) 
-			{
-				fail++;
-			}
-		}
-	}
-	
-	// Print results
-	printf("Non-Matching CPU-GPU Outputs Beyond Error Threshold of %4.2f Percent: %d\n", PERCENT_DIFF_ERROR_THRESHOLD, fail);
-}
-
-
 void GPU_argv_init()
 {
 	cudaDeviceProp deviceProp;
 	cudaGetDeviceProperties(&deviceProp, GPU_DEVICE);
-	printf("setting device %d with name %s\n",GPU_DEVICE,deviceProp.name);
 	cudaSetDevice( GPU_DEVICE );
 }
 
@@ -142,10 +92,8 @@ __global__ void gemm_kernel(DATA_TYPE *a, DATA_TYPE *b, DATA_TYPE *c)
 }
 
 
-void gemmCuda(DATA_TYPE* A, DATA_TYPE* B, DATA_TYPE* C, DATA_TYPE* C_outputFromGpu)
+void gemmCuda(DATA_TYPE* A, DATA_TYPE* B, DATA_TYPE* C)
 {
-	double t_start, t_end;
-
 	DATA_TYPE *A_gpu;
 	DATA_TYPE *B_gpu;
 	DATA_TYPE *C_gpu;
@@ -161,16 +109,10 @@ void gemmCuda(DATA_TYPE* A, DATA_TYPE* B, DATA_TYPE* C, DATA_TYPE* C_outputFromG
 	dim3 block(DIM_THREAD_BLOCK_X, DIM_THREAD_BLOCK_Y);
 	dim3 grid((size_t)(ceil( ((float)NI)/ ((float)block.x) )),(size_t)(ceil( ((float)NJ)/ ((float)block.y) )));
 
-	t_start = rtclock();
-
 	gemm_kernel<<< grid, block >>>(A_gpu, B_gpu, C_gpu);
 	cudaThreadSynchronize();
 
-	t_end = rtclock();
-	fprintf(stdout, "GPU Runtime: %0.6lfs\n", t_end - t_start);
-
-	cudaMemcpy(C_outputFromGpu, C_gpu, sizeof(DATA_TYPE) * NI * NJ, cudaMemcpyDeviceToHost);    
-	
+	cudaMemcpy(C, C_gpu, sizeof(DATA_TYPE) * NI * NJ, cudaMemcpyDeviceToHost);    
 	cudaFree(A_gpu);
 	cudaFree(B_gpu);
 	cudaFree(C_gpu);
@@ -184,30 +126,26 @@ int main(int argc, char *argv[])
 	DATA_TYPE* A;
 	DATA_TYPE* B;  
 	DATA_TYPE* C;  
-	DATA_TYPE* C_outputFromGpu; 
 
 	A = (DATA_TYPE*)malloc(NI*NK*sizeof(DATA_TYPE)); 
 	B = (DATA_TYPE*)malloc(NK*NJ*sizeof(DATA_TYPE));   
 	C = (DATA_TYPE*)malloc(NI*NJ*sizeof(DATA_TYPE)); 
-	C_outputFromGpu = (DATA_TYPE*)malloc(NI*NJ*sizeof(DATA_TYPE)); 
 
 	init(A, B, C);
 	
 	GPU_argv_init();
 	
-	gemmCuda(A, B, C, C_outputFromGpu);
-
-	t_start = rtclock();	
-	gemm(A, B, C);
+	t_start = rtclock();
+	gemmCuda(A, B, C);
 	t_end = rtclock();
-	fprintf(stdout, "CPU Runtime: %0.6lfs\n", t_end - t_start);
-	
-	compareResults(C, C_outputFromGpu);
+
+#ifdef POLYBENCH_TIME
+	fprintf(stdout, "%0.6lfs\n", t_end - t_start);
+#endif
 
 	free(A);
 	free(B);  
 	free(C);  
-	free(C_outputFromGpu); 
 
     	return 0;
 }
