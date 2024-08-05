@@ -7,6 +7,7 @@
  * Web address: http://www.cse.ohio-state.edu/~pouchet/software/polybench/GPU
  */
 
+#include <assert.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <time.h>
@@ -37,32 +38,47 @@
 #define DATA_TYPE float
 #endif
 
+#define cudaCheckReturn(ret) \
+	do { \
+		cudaError_t cudaCheckReturn_e = (ret); \
+		if (cudaCheckReturn_e != cudaSuccess) { \
+			fprintf(stderr, "CUDA error: %s\n", cudaGetErrorString(cudaCheckReturn_e)); \
+			fflush(stderr); \
+		} \
+		assert(cudaCheckReturn_e == cudaSuccess); \
+	} while(0)
+
+#define cudaCheckKernel() \
+	do { \
+		cudaCheckReturn(cudaGetLastError()); \
+	} while(0)
+
 
 void init(DATA_TYPE *A, DATA_TYPE *B, DATA_TYPE *C)
 {
 	int i, j;
 
-  	for (i = 0; i < NI; i++)
+	for (i = 0; i < NI; i++)
 	{
-    	for (j = 0; j < NK; j++)
+		for (j = 0; j < NK; j++)
 		{
-      		A[i*NK + j] = ((DATA_TYPE) i*j) / NI;
+			A[i*NK + j] = ((DATA_TYPE) i*j) / NI;
 		}
 	}
 
-  	for (i = 0; i < NK; i++)
+	for (i = 0; i < NK; i++)
 	{
-    	for (j = 0; j < NJ; j++)
+		for (j = 0; j < NJ; j++)
 		{
-      		B[i*NJ + j] = ((DATA_TYPE) i*j + 1) / NJ;
+			B[i*NJ + j] = ((DATA_TYPE) i*j + 1) / NJ;
 		}
 	}
 
-  	for (i = 0; i < NI; i++)
+	for (i = 0; i < NI; i++)
 	{
-    	for (j = 0; j < NJ; j++)
+		for (j = 0; j < NJ; j++)
 		{
-      		C[i*NJ + j] = ((DATA_TYPE) i*j + 2) / NJ;
+			C[i*NJ + j] = ((DATA_TYPE) i*j + 2) / NJ;
 		}
 	}
 }
@@ -70,10 +86,9 @@ void init(DATA_TYPE *A, DATA_TYPE *B, DATA_TYPE *C)
 void GPU_argv_init()
 {
 	cudaDeviceProp deviceProp;
-	cudaGetDeviceProperties(&deviceProp, GPU_DEVICE);
-	cudaSetDevice( GPU_DEVICE );
+	cudaCheckReturn(cudaGetDeviceProperties(&deviceProp, GPU_DEVICE));
+	cudaCheckReturn(cudaSetDevice(GPU_DEVICE));
 }
-
 
 __global__ void gemm_kernel(DATA_TYPE *a, DATA_TYPE *b, DATA_TYPE *c)
 {
@@ -84,13 +99,12 @@ __global__ void gemm_kernel(DATA_TYPE *a, DATA_TYPE *b, DATA_TYPE *c)
 	{	
 		c[i * NJ + j] *= BETA;
 		int k;
-		for(k=0; k < NK; k++)
+		for (k = 0; k < NK; k++)
 		{
-			c[i * NJ + j] += ALPHA * a[i * NK + k] * b[k * NJ +j];
+			c[i * NJ + j] += ALPHA * a[i * NK + k] * b[k * NJ + j];
 		}
 	}
 }
-
 
 void gemmCuda(DATA_TYPE* A, DATA_TYPE* B, DATA_TYPE* C)
 {
@@ -98,26 +112,26 @@ void gemmCuda(DATA_TYPE* A, DATA_TYPE* B, DATA_TYPE* C)
 	DATA_TYPE *B_gpu;
 	DATA_TYPE *C_gpu;
 
-	cudaMalloc((void **)&A_gpu, sizeof(DATA_TYPE) * NI * NK);
-	cudaMalloc((void **)&B_gpu, sizeof(DATA_TYPE) * NK * NJ);
-	cudaMalloc((void **)&C_gpu, sizeof(DATA_TYPE) * NI * NJ);
+	cudaCheckReturn(cudaMalloc((void **)&A_gpu, sizeof(DATA_TYPE) * NI * NK));
+	cudaCheckReturn(cudaMalloc((void **)&B_gpu, sizeof(DATA_TYPE) * NK * NJ));
+	cudaCheckReturn(cudaMalloc((void **)&C_gpu, sizeof(DATA_TYPE) * NI * NJ));
 	
-	cudaMemcpy(A_gpu, A, sizeof(DATA_TYPE) * NI * NK, cudaMemcpyHostToDevice);
-	cudaMemcpy(B_gpu, B, sizeof(DATA_TYPE) * NK * NJ, cudaMemcpyHostToDevice);
-	cudaMemcpy(C_gpu, C, sizeof(DATA_TYPE) * NI * NJ, cudaMemcpyHostToDevice);
+	cudaCheckReturn(cudaMemcpy(A_gpu, A, sizeof(DATA_TYPE) * NI * NK, cudaMemcpyHostToDevice));
+	cudaCheckReturn(cudaMemcpy(B_gpu, B, sizeof(DATA_TYPE) * NK * NJ, cudaMemcpyHostToDevice));
+	cudaCheckReturn(cudaMemcpy(C_gpu, C, sizeof(DATA_TYPE) * NI * NJ, cudaMemcpyHostToDevice));
 	
 	dim3 block(DIM_THREAD_BLOCK_X, DIM_THREAD_BLOCK_Y);
-	dim3 grid((size_t)(ceil( ((float)NI)/ ((float)block.x) )),(size_t)(ceil( ((float)NJ)/ ((float)block.y) )));
+	dim3 grid((size_t)ceil((float)NI / (float)block.x), (size_t)ceil((float)NJ / (float)block.y));
 
-	gemm_kernel<<< grid, block >>>(A_gpu, B_gpu, C_gpu);
-	cudaThreadSynchronize();
+	gemm_kernel<<<grid, block>>>(A_gpu, B_gpu, C_gpu);
+	cudaCheckKernel();
+	cudaCheckReturn(cudaDeviceSynchronize());
 
-	cudaMemcpy(C, C_gpu, sizeof(DATA_TYPE) * NI * NJ, cudaMemcpyDeviceToHost);    
-	cudaFree(A_gpu);
-	cudaFree(B_gpu);
-	cudaFree(C_gpu);
+	cudaCheckReturn(cudaMemcpy(C, C_gpu, sizeof(DATA_TYPE) * NI * NJ, cudaMemcpyDeviceToHost));    
+	cudaCheckReturn(cudaFree(A_gpu));
+	cudaCheckReturn(cudaFree(B_gpu));
+	cudaCheckReturn(cudaFree(C_gpu));
 }
-	
 
 int main(int argc, char *argv[])
 {
@@ -140,13 +154,12 @@ int main(int argc, char *argv[])
 	t_end = rtclock();
 
 #ifdef POLYBENCH_TIME
-	fprintf(stdout, "%0.6lfs\n", t_end - t_start);
+	fprintf(stdout, "%0.6lf\n", t_end - t_start);
 #endif
 
 	free(A);
 	free(B);  
 	free(C);  
 
-    	return 0;
+	return 0;
 }
-

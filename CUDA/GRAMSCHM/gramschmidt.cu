@@ -7,6 +7,7 @@
  * Web address: http://www.cse.ohio-state.edu/~pouchet/software/polybench/GPU
  */
 
+#include <assert.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <time.h>
@@ -32,6 +33,20 @@
 #define DATA_TYPE float
 #endif
 
+#define cudaCheckReturn(ret) \
+	do { \
+		cudaError_t cudaCheckReturn_e = (ret); \
+		if (cudaCheckReturn_e != cudaSuccess) { \
+			fprintf(stderr, "CUDA error: %s\n", cudaGetErrorString(cudaCheckReturn_e)); \
+			fflush(stderr); \
+		} \
+		assert(cudaCheckReturn_e == cudaSuccess); \
+	} while(0)
+
+#define cudaCheckKernel() \
+	do { \
+		cudaCheckReturn(cudaGetLastError()); \
+	} while(0)
 
 void init_array(DATA_TYPE* A)
 {
@@ -49,8 +64,8 @@ void init_array(DATA_TYPE* A)
 void GPU_argv_init()
 {
 	cudaDeviceProp deviceProp;
-	cudaGetDeviceProperties(&deviceProp, GPU_DEVICE);
-	cudaSetDevice( GPU_DEVICE );	
+	cudaCheckReturn(cudaGetDeviceProperties(&deviceProp, GPU_DEVICE));
+	cudaCheckReturn(cudaSetDevice(GPU_DEVICE));	
 	return;
 }
 
@@ -116,29 +131,32 @@ void gramschmidtCuda(DATA_TYPE* A, DATA_TYPE* R, DATA_TYPE* Q)
 	DATA_TYPE *R_gpu;
 	DATA_TYPE *Q_gpu;
 
-	cudaMalloc((void **)&A_gpu, sizeof(DATA_TYPE) * M * N);
-	cudaMalloc((void **)&R_gpu, sizeof(DATA_TYPE) * M * N);
-	cudaMalloc((void **)&Q_gpu, sizeof(DATA_TYPE) * M * N);
-	cudaMemcpy(A_gpu, A, sizeof(DATA_TYPE) * M * N, cudaMemcpyHostToDevice);
+	cudaCheckReturn(cudaMalloc((void **)&A_gpu, sizeof(DATA_TYPE) * M * N));
+	cudaCheckReturn(cudaMalloc((void **)&R_gpu, sizeof(DATA_TYPE) * M * N));
+	cudaCheckReturn(cudaMalloc((void **)&Q_gpu, sizeof(DATA_TYPE) * M * N));
+	cudaCheckReturn(cudaMemcpy(A_gpu, A, sizeof(DATA_TYPE) * M * N, cudaMemcpyHostToDevice));
 	
 	int k;
 	for (k = 0; k < N; k++)
 	{
 		gramschmidt_kernel1<<<gridKernel1,block>>>(A_gpu, R_gpu, Q_gpu, k);
-		cudaThreadSynchronize();
+		cudaCheckKernel();
+		cudaCheckReturn(cudaDeviceSynchronize());
 		gramschmidt_kernel2<<<gridKernel2,block>>>(A_gpu, R_gpu, Q_gpu, k);
-		cudaThreadSynchronize();
+		cudaCheckKernel();
+		cudaCheckReturn(cudaDeviceSynchronize());
 		gramschmidt_kernel3<<<gridKernel3,block>>>(A_gpu, R_gpu, Q_gpu, k);
-		cudaThreadSynchronize();
+		cudaCheckKernel();
+		cudaCheckReturn(cudaDeviceSynchronize());
 	}
 	
-	cudaMemcpy(A, A_gpu, sizeof(DATA_TYPE) * M * N, cudaMemcpyDeviceToHost);    
-	cudaMemcpy(R, R_gpu, sizeof(DATA_TYPE) * M * N, cudaMemcpyDeviceToHost);
-	cudaMemcpy(Q, Q_gpu, sizeof(DATA_TYPE) * M * N, cudaMemcpyDeviceToHost);
+	cudaCheckReturn(cudaMemcpy(A, A_gpu, sizeof(DATA_TYPE) * M * N, cudaMemcpyDeviceToHost));    
+	cudaCheckReturn(cudaMemcpy(R, R_gpu, sizeof(DATA_TYPE) * M * N, cudaMemcpyDeviceToHost));
+	cudaCheckReturn(cudaMemcpy(Q, Q_gpu, sizeof(DATA_TYPE) * M * N, cudaMemcpyDeviceToHost));
 
-	cudaFree(A_gpu);
-	cudaFree(R_gpu);
-	cudaFree(Q_gpu);
+	cudaCheckReturn(cudaFree(A_gpu));
+	cudaCheckReturn(cudaFree(R_gpu));
+	cudaCheckReturn(cudaFree(Q_gpu));
 }
 
 
@@ -163,7 +181,7 @@ int main(int argc, char *argv[])
 	t_end = rtclock();
 
 #ifdef POLYBENCH_TIME
-	fprintf(stdout, "%0.6lfs\n", t_end - t_start);
+	fprintf(stdout, "%0.6lf\n", t_end - t_start);
 #endif
 	
 	free(A);

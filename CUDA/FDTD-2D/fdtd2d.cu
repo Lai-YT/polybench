@@ -7,6 +7,7 @@
  * Web address: http://www.cse.ohio-state.edu/~pouchet/software/polybench/GPU
  */
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -32,12 +33,26 @@
 #define DATA_TYPE float
 #endif
 
+#define cudaCheckReturn(ret) \
+	do { \
+		cudaError_t cudaCheckReturn_e = (ret); \
+		if (cudaCheckReturn_e != cudaSuccess) { \
+			fprintf(stderr, "CUDA error: %s\n", cudaGetErrorString(cudaCheckReturn_e)); \
+			fflush(stderr); \
+		} \
+		assert(cudaCheckReturn_e == cudaSuccess); \
+	} while(0)
+
+#define cudaCheckKernel() \
+	do { \
+		cudaCheckReturn(cudaGetLastError()); \
+	} while(0)
 
 void init_arrays(DATA_TYPE* _fict_, DATA_TYPE* ex, DATA_TYPE* ey, DATA_TYPE* hz)
 {
 	int i, j;
 
-  	for (i = 0; i < tmax; i++)
+	for (i = 0; i < tmax; i++)
 	{
 		_fict_[i] = (DATA_TYPE) i;
 	}
@@ -56,11 +71,9 @@ void init_arrays(DATA_TYPE* _fict_, DATA_TYPE* ex, DATA_TYPE* ey, DATA_TYPE* hz)
 void GPU_argv_init()
 {
 	cudaDeviceProp deviceProp;
-	cudaGetDeviceProperties(&deviceProp, GPU_DEVICE);
-	cudaSetDevice( GPU_DEVICE );
+	cudaCheckReturn(cudaGetDeviceProperties(&deviceProp, GPU_DEVICE));
+	cudaCheckReturn(cudaSetDevice(GPU_DEVICE));
 }
-
-
 
 __global__ void fdtd_step1_kernel(DATA_TYPE* _fict_, DATA_TYPE *ex, DATA_TYPE *ey, DATA_TYPE *hz, int t)
 {
@@ -80,8 +93,6 @@ __global__ void fdtd_step1_kernel(DATA_TYPE* _fict_, DATA_TYPE *ex, DATA_TYPE *e
 	}
 }
 
-
-
 __global__ void fdtd_step2_kernel(DATA_TYPE *ex, DATA_TYPE *ey, DATA_TYPE *hz, int t)
 {
 	int j = blockIdx.x * blockDim.x + threadIdx.x;
@@ -92,7 +103,6 @@ __global__ void fdtd_step2_kernel(DATA_TYPE *ex, DATA_TYPE *ey, DATA_TYPE *hz, i
 		ex[i * (NY+1) + j] = ex[i * (NY+1) + j] - 0.5f*(hz[i * NY + j] - hz[i * NY + (j-1)]);
 	}
 }
-
 
 __global__ void fdtd_step3_kernel(DATA_TYPE *ex, DATA_TYPE *ey, DATA_TYPE *hz, int t)
 {
@@ -105,7 +115,6 @@ __global__ void fdtd_step3_kernel(DATA_TYPE *ex, DATA_TYPE *ey, DATA_TYPE *hz, i
 	}
 }
 
-
 void fdtdCuda(DATA_TYPE* _fict_, DATA_TYPE* ex, DATA_TYPE* ey, DATA_TYPE* hz)
 {
 	DATA_TYPE *_fict_gpu;
@@ -113,40 +122,43 @@ void fdtdCuda(DATA_TYPE* _fict_, DATA_TYPE* ex, DATA_TYPE* ey, DATA_TYPE* hz)
 	DATA_TYPE *ey_gpu;
 	DATA_TYPE *hz_gpu;
 
-	cudaMalloc((void **)&_fict_gpu, sizeof(DATA_TYPE) * tmax);
-	cudaMalloc((void **)&ex_gpu, sizeof(DATA_TYPE) * NX * (NY + 1));
-	cudaMalloc((void **)&ey_gpu, sizeof(DATA_TYPE) * (NX + 1) * NY);
-	cudaMalloc((void **)&hz_gpu, sizeof(DATA_TYPE) * NX * NY);
+	cudaCheckReturn(cudaMalloc((void **)&_fict_gpu, sizeof(DATA_TYPE) * tmax));
+	cudaCheckReturn(cudaMalloc((void **)&ex_gpu, sizeof(DATA_TYPE) * NX * (NY + 1)));
+	cudaCheckReturn(cudaMalloc((void **)&ey_gpu, sizeof(DATA_TYPE) * (NX + 1) * NY));
+	cudaCheckReturn(cudaMalloc((void **)&hz_gpu, sizeof(DATA_TYPE) * NX * NY));
 
-	cudaMemcpy(_fict_gpu, _fict_, sizeof(DATA_TYPE) * tmax, cudaMemcpyHostToDevice);
-	cudaMemcpy(ex_gpu, ex, sizeof(DATA_TYPE) * NX * (NY + 1), cudaMemcpyHostToDevice);
-	cudaMemcpy(ey_gpu, ey, sizeof(DATA_TYPE) * (NX + 1) * NY, cudaMemcpyHostToDevice);
-	cudaMemcpy(hz_gpu, hz, sizeof(DATA_TYPE) * NX * NY, cudaMemcpyHostToDevice);
+	cudaCheckReturn(cudaMemcpy(_fict_gpu, _fict_, sizeof(DATA_TYPE) * tmax, cudaMemcpyHostToDevice));
+	cudaCheckReturn(cudaMemcpy(ex_gpu, ex, sizeof(DATA_TYPE) * NX * (NY + 1), cudaMemcpyHostToDevice));
+	cudaCheckReturn(cudaMemcpy(ey_gpu, ey, sizeof(DATA_TYPE) * (NX + 1) * NY, cudaMemcpyHostToDevice));
+	cudaCheckReturn(cudaMemcpy(hz_gpu, hz, sizeof(DATA_TYPE) * NX * NY, cudaMemcpyHostToDevice));
 
 	dim3 block(DIM_THREAD_BLOCK_X, DIM_THREAD_BLOCK_Y);
-	dim3 grid( (size_t)ceil(((float)NY) / ((float)block.x)), (size_t)ceil(((float)NX) / ((float)block.y)));
-
+	dim3 grid((size_t)ceil(((float)NY) / ((float)block.x)), (size_t)ceil(((float)NX) / ((float)block.y)));
 
 	for(int t = 0; t< tmax; t++)
 	{
 		fdtd_step1_kernel<<<grid,block>>>(_fict_gpu, ex_gpu, ey_gpu, hz_gpu, t);
-		cudaThreadSynchronize();
-		fdtd_step2_kernel<<<grid,block>>>(ex_gpu, ey_gpu, hz_gpu, t);
-		cudaThreadSynchronize();
-		fdtd_step3_kernel<<<grid,block>>>(ex_gpu, ey_gpu, hz_gpu, t);
-		cudaThreadSynchronize();
-	}
-	
-	cudaMemcpy(ex, ex_gpu, sizeof(DATA_TYPE) * NX * (NY + 1), cudaMemcpyDeviceToHost);
-	cudaMemcpy(ey, ey_gpu, sizeof(DATA_TYPE) * (NX + 1) * NY, cudaMemcpyDeviceToHost);
-	cudaMemcpy(hz, hz_gpu, sizeof(DATA_TYPE) * NX * NY, cudaMemcpyDeviceToHost);	
-		
-	cudaFree(_fict_gpu);
-	cudaFree(ex_gpu);
-	cudaFree(ey_gpu);
-	cudaFree(hz_gpu);
-}
+		cudaCheckKernel();
+		cudaCheckReturn(cudaDeviceSynchronize());
 
+		fdtd_step2_kernel<<<grid,block>>>(ex_gpu, ey_gpu, hz_gpu, t);
+		cudaCheckKernel();
+		cudaCheckReturn(cudaDeviceSynchronize());
+
+		fdtd_step3_kernel<<<grid,block>>>(ex_gpu, ey_gpu, hz_gpu, t);
+		cudaCheckKernel();
+		cudaCheckReturn(cudaDeviceSynchronize());
+	}
+
+	cudaCheckReturn(cudaMemcpy(ex, ex_gpu, sizeof(DATA_TYPE) * NX * (NY + 1), cudaMemcpyDeviceToHost));
+	cudaCheckReturn(cudaMemcpy(ey, ey_gpu, sizeof(DATA_TYPE) * (NX + 1) * NY, cudaMemcpyDeviceToHost));
+	cudaCheckReturn(cudaMemcpy(hz, hz_gpu, sizeof(DATA_TYPE) * NX * NY, cudaMemcpyDeviceToHost));
+
+	cudaCheckReturn(cudaFree(_fict_gpu));
+	cudaCheckReturn(cudaFree(ex_gpu));
+	cudaCheckReturn(cudaFree(ey_gpu));
+	cudaCheckReturn(cudaFree(hz_gpu));
+}
 
 int main()
 {
@@ -171,7 +183,7 @@ int main()
 	t_end = rtclock();
 	
 #ifdef POLYBENCH_TIME
-	fprintf(stdout, "%0.6lfs\n", t_end - t_start);
+	fprintf(stdout, "%0.6lf\n", t_end - t_start);
 #endif
 	
 	free(_fict_);

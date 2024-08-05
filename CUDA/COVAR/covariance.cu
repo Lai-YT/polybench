@@ -7,6 +7,7 @@
  * Web address: http://www.cse.ohio-state.edu/~pouchet/software/polybench/GPU
  */
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -44,6 +45,20 @@
 #define DATA_TYPE float
 #endif
 
+#define cudaCheckReturn(ret) \
+	do { \
+		cudaError_t cudaCheckReturn_e = (ret); \
+		if (cudaCheckReturn_e != cudaSuccess) { \
+			fprintf(stderr, "CUDA error: %s\n", cudaGetErrorString(cudaCheckReturn_e)); \
+			fflush(stderr); \
+		} \
+		assert(cudaCheckReturn_e == cudaSuccess); \
+	} while(0)
+
+#define cudaCheckKernel() \
+	do { \
+		cudaCheckReturn(cudaGetLastError()); \
+	} while(0)
 
 void init_arrays(DATA_TYPE* data)
 {
@@ -61,12 +76,11 @@ void init_arrays(DATA_TYPE* data)
 void GPU_argv_init()
 {
 	cudaDeviceProp deviceProp;
-	cudaGetDeviceProperties(&deviceProp, GPU_DEVICE);
-	cudaSetDevice( GPU_DEVICE );
+	cudaCheckReturn(cudaGetDeviceProperties(&deviceProp, GPU_DEVICE));
+	cudaCheckReturn(cudaSetDevice(GPU_DEVICE));
 	
 	return;
 }
-
 
 __global__ void mean_kernel(DATA_TYPE *mean, DATA_TYPE *data)
 {
@@ -85,7 +99,6 @@ __global__ void mean_kernel(DATA_TYPE *mean, DATA_TYPE *data)
 	}
 }
 
-
 __global__ void reduce_kernel(DATA_TYPE *mean, DATA_TYPE *data)
 {
 	int j = blockIdx.x * blockDim.x + threadIdx.x + 1;
@@ -96,7 +109,6 @@ __global__ void reduce_kernel(DATA_TYPE *mean, DATA_TYPE *data)
 		data[i * (M+1) + j] -= mean[j];	
 	}
 }
-
 
 __global__ void covar_kernel(DATA_TYPE *symmat, DATA_TYPE *data)
 {
@@ -117,19 +129,18 @@ __global__ void covar_kernel(DATA_TYPE *symmat, DATA_TYPE *data)
 	}
 }
 
-
 void covarianceCuda(DATA_TYPE* data, DATA_TYPE* symmat, DATA_TYPE* mean)
 {
 	DATA_TYPE *data_gpu;
 	DATA_TYPE *mean_gpu;
 	DATA_TYPE *symmat_gpu;
 
-	cudaMalloc((void **)&data_gpu, sizeof(DATA_TYPE) * (M+1) * (N+1));
-	cudaMalloc((void **)&symmat_gpu, sizeof(DATA_TYPE) * (M+1) * (M+1));
-	cudaMalloc((void **)&mean_gpu, sizeof(DATA_TYPE) * (M+1));
-	cudaMemcpy(data_gpu, data, sizeof(DATA_TYPE) * (M+1) * (N+1), cudaMemcpyHostToDevice);
-	cudaMemcpy(symmat_gpu, symmat, sizeof(DATA_TYPE) * (M+1) * (M+1), cudaMemcpyHostToDevice);
-	cudaMemcpy(mean_gpu, mean, sizeof(DATA_TYPE) * (M+1), cudaMemcpyHostToDevice);
+	cudaCheckReturn(cudaMalloc((void **)&data_gpu, sizeof(DATA_TYPE) * (M+1) * (N+1)));
+	cudaCheckReturn(cudaMalloc((void **)&symmat_gpu, sizeof(DATA_TYPE) * (M+1) * (M+1)));
+	cudaCheckReturn(cudaMalloc((void **)&mean_gpu, sizeof(DATA_TYPE) * (M+1)));
+	cudaCheckReturn(cudaMemcpy(data_gpu, data, sizeof(DATA_TYPE) * (M+1) * (N+1), cudaMemcpyHostToDevice));
+	cudaCheckReturn(cudaMemcpy(symmat_gpu, symmat, sizeof(DATA_TYPE) * (M+1) * (M+1), cudaMemcpyHostToDevice));
+	cudaCheckReturn(cudaMemcpy(mean_gpu, mean, sizeof(DATA_TYPE) * (M+1), cudaMemcpyHostToDevice));
 	
 	dim3 block1(DIM_THREAD_BLOCK_KERNEL_1_X, DIM_THREAD_BLOCK_KERNEL_1_Y);
 	dim3 grid1((size_t)(ceil((float)M) / ((float)DIM_THREAD_BLOCK_KERNEL_1_X)), 1);
@@ -140,22 +151,26 @@ void covarianceCuda(DATA_TYPE* data, DATA_TYPE* symmat, DATA_TYPE* mean)
 	dim3 block3(DIM_THREAD_BLOCK_KERNEL_3_X, DIM_THREAD_BLOCK_KERNEL_3_Y);
 	dim3 grid3((size_t)(ceil((float)M) / ((float)DIM_THREAD_BLOCK_KERNEL_3_X)), 1);
 	
-	mean_kernel<<<grid1, block1>>>(mean_gpu,data_gpu);
-	cudaThreadSynchronize();
-	reduce_kernel<<<grid2, block2>>>(mean_gpu,data_gpu);
-	cudaThreadSynchronize();
-	covar_kernel<<<grid3, block3>>>(symmat_gpu,data_gpu);
-	cudaThreadSynchronize();
-
-	cudaMemcpy(data, data_gpu, sizeof(DATA_TYPE) * (M+1) * (N+1), cudaMemcpyDeviceToHost);
-	cudaMemcpy(mean, mean_gpu, sizeof(DATA_TYPE) * (M+1), cudaMemcpyDeviceToHost);
-	cudaMemcpy(symmat, symmat_gpu, sizeof(DATA_TYPE) * (M+1) * (N+1), cudaMemcpyDeviceToHost);
+	mean_kernel<<<grid1, block1>>>(mean_gpu, data_gpu);
+	cudaCheckKernel();
+	cudaCheckReturn(cudaDeviceSynchronize());
 	
-	cudaFree(data_gpu);
-	cudaFree(symmat_gpu);
-	cudaFree(mean_gpu);
-}
+	reduce_kernel<<<grid2, block2>>>(mean_gpu, data_gpu);
+	cudaCheckKernel();
+	cudaCheckReturn(cudaDeviceSynchronize());
 
+	covar_kernel<<<grid3, block3>>>(symmat_gpu, data_gpu);
+	cudaCheckKernel();
+	cudaCheckReturn(cudaDeviceSynchronize());
+
+	cudaCheckReturn(cudaMemcpy(data, data_gpu, sizeof(DATA_TYPE) * (M+1) * (N+1), cudaMemcpyDeviceToHost));
+	cudaCheckReturn(cudaMemcpy(mean, mean_gpu, sizeof(DATA_TYPE) * (M+1), cudaMemcpyDeviceToHost));
+	cudaCheckReturn(cudaMemcpy(symmat, symmat_gpu, sizeof(DATA_TYPE) * (M+1) * (N+1), cudaMemcpyDeviceToHost));
+
+	cudaCheckReturn(cudaFree(data_gpu));
+	cudaCheckReturn(cudaFree(symmat_gpu));
+	cudaCheckReturn(cudaFree(mean_gpu));
+}
 
 int main()
 {
@@ -170,14 +185,14 @@ int main()
 	mean = (DATA_TYPE*)malloc((M+1)*sizeof(DATA_TYPE));
 
 	init_arrays(data);
-    
+
 	GPU_argv_init();
 
 	t_start = rtclock();
 	covarianceCuda(data, symmat, mean);
 	t_end = rtclock();
 #ifdef POLYBENCH_TIME
-	fprintf(stdout, "%0.6lfs\n", t_end - t_start);
+	fprintf(stdout, "%0.6lf\n", t_end - t_start);
 #endif
 
 	free(data);

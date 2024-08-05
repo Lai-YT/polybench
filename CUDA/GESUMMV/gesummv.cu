@@ -7,6 +7,7 @@
  * Web address: http://www.cse.ohio-state.edu/~pouchet/software/polybench/GPU
  */
 
+#include <assert.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <sys/time.h>
@@ -33,6 +34,20 @@
 #define DATA_TYPE float
 #endif
 
+#define cudaCheckReturn(ret) \
+	do { \
+		cudaError_t cudaCheckReturn_e = (ret); \
+		if (cudaCheckReturn_e != cudaSuccess) { \
+			fprintf(stderr, "CUDA error: %s\n", cudaGetErrorString(cudaCheckReturn_e)); \
+			fflush(stderr); \
+		} \
+		assert(cudaCheckReturn_e == cudaSuccess); \
+	} while(0)
+
+#define cudaCheckKernel() \
+	do { \
+		cudaCheckReturn(cudaGetLastError()); \
+	} while(0)
 
 void init(DATA_TYPE* A, DATA_TYPE* x)
 {
@@ -52,8 +67,8 @@ void init(DATA_TYPE* A, DATA_TYPE* x)
 void GPU_argv_init()
 {
 	cudaDeviceProp deviceProp;
-	cudaGetDeviceProperties(&deviceProp, GPU_DEVICE);
-	cudaSetDevice( GPU_DEVICE );
+	cudaCheckReturn(cudaGetDeviceProperties(&deviceProp, GPU_DEVICE));
+	cudaCheckReturn(cudaSetDevice( GPU_DEVICE ));
 }
 
 
@@ -81,33 +96,33 @@ void gesummvCuda(DATA_TYPE* A, DATA_TYPE* B, DATA_TYPE* x, DATA_TYPE* y, DATA_TY
 	DATA_TYPE *y_gpu;
 	DATA_TYPE *tmp_gpu;
 
-	cudaMalloc((void **)&A_gpu, sizeof(DATA_TYPE) * N * N);
-	cudaMalloc((void **)&B_gpu, sizeof(DATA_TYPE) * N * N);
-	cudaMalloc((void **)&x_gpu, sizeof(DATA_TYPE) * N);
-	cudaMalloc((void **)&y_gpu, sizeof(DATA_TYPE) * N);
-	cudaMalloc((void **)&tmp_gpu, sizeof(DATA_TYPE) * N);
+	cudaCheckReturn(cudaMalloc((void **)&A_gpu, sizeof(DATA_TYPE) * N * N));
+	cudaCheckReturn(cudaMalloc((void **)&B_gpu, sizeof(DATA_TYPE) * N * N));
+	cudaCheckReturn(cudaMalloc((void **)&x_gpu, sizeof(DATA_TYPE) * N));
+	cudaCheckReturn(cudaMalloc((void **)&y_gpu, sizeof(DATA_TYPE) * N));
+	cudaCheckReturn(cudaMalloc((void **)&tmp_gpu, sizeof(DATA_TYPE) * N));
 	
-	cudaMemcpy(A_gpu, A, sizeof(DATA_TYPE) * N * N, cudaMemcpyHostToDevice);
-	cudaMemcpy(B_gpu, B, sizeof(DATA_TYPE) * N * N, cudaMemcpyHostToDevice);
-	cudaMemcpy(x_gpu, x, sizeof(DATA_TYPE) * N, cudaMemcpyHostToDevice);
-	cudaMemcpy(y_gpu, y, sizeof(DATA_TYPE) * N, cudaMemcpyHostToDevice);
-	cudaMemcpy(tmp_gpu, tmp, sizeof(DATA_TYPE) * N, cudaMemcpyHostToDevice);
+	cudaCheckReturn(cudaMemcpy(A_gpu, A, sizeof(DATA_TYPE) * N * N, cudaMemcpyHostToDevice));
+	cudaCheckReturn(cudaMemcpy(B_gpu, B, sizeof(DATA_TYPE) * N * N, cudaMemcpyHostToDevice));
+	cudaCheckReturn(cudaMemcpy(x_gpu, x, sizeof(DATA_TYPE) * N, cudaMemcpyHostToDevice));
+	cudaCheckReturn(cudaMemcpy(y_gpu, y, sizeof(DATA_TYPE) * N, cudaMemcpyHostToDevice));
+	cudaCheckReturn(cudaMemcpy(tmp_gpu, tmp, sizeof(DATA_TYPE) * N, cudaMemcpyHostToDevice));
 
 	dim3 block(DIM_THREAD_BLOCK_X, DIM_THREAD_BLOCK_Y);
 	dim3 grid((unsigned int)ceil( ((float)N) / ((float)block.x) ), 1);
 
-
 	gesummv_kernel<<< grid, block>>>(A_gpu,B_gpu,x_gpu, y_gpu, tmp_gpu);
-	cudaThreadSynchronize();
+	cudaCheckKernel();
+	cudaCheckReturn(cudaDeviceSynchronize());
 
-	cudaMemcpy(tmp, tmp_gpu, sizeof(DATA_TYPE) * N, cudaMemcpyDeviceToHost);
-	cudaMemcpy(y, y_gpu, sizeof(DATA_TYPE) * N, cudaMemcpyDeviceToHost);
+	cudaCheckReturn(cudaMemcpy(tmp, tmp_gpu, sizeof(DATA_TYPE) * N, cudaMemcpyDeviceToHost));
+	cudaCheckReturn(cudaMemcpy(y, y_gpu, sizeof(DATA_TYPE) * N, cudaMemcpyDeviceToHost));
 
-	cudaFree(A_gpu);
-	cudaFree(B_gpu);
-	cudaFree(x_gpu);
-	cudaFree(y_gpu);
-	cudaFree(tmp_gpu);
+	cudaCheckReturn(cudaFree(A_gpu));
+	cudaCheckReturn(cudaFree(B_gpu));
+	cudaCheckReturn(cudaFree(x_gpu));
+	cudaCheckReturn(cudaFree(y_gpu));
+	cudaCheckReturn(cudaFree(tmp_gpu));
 }
 
 
@@ -135,7 +150,7 @@ int main(int argc, char *argv[])
 	gesummvCuda(A, B, x, y, tmp);
 	t_end = rtclock();
 #ifdef POLYBENCH_TIME
-	fprintf(stdout, "%0.6lfs\n", t_end - t_start);
+	fprintf(stdout, "%0.6lf\n", t_end - t_start);
 #endif
 	
 	free(A);

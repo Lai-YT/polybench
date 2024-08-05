@@ -7,6 +7,7 @@
  * Web address: http://www.cse.ohio-state.edu/~pouchet/software/polybench/GPU
  */
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -34,6 +35,20 @@
 #define DATA_TYPE float
 #endif
 
+#define cudaCheckReturn(ret) \
+	do { \
+		cudaError_t cudaCheckReturn_e = (ret); \
+		if (cudaCheckReturn_e != cudaSuccess) { \
+			fprintf(stderr, "CUDA error: %s\n", cudaGetErrorString(cudaCheckReturn_e)); \
+			fflush(stderr); \
+		} \
+		assert(cudaCheckReturn_e == cudaSuccess); \
+	} while(0)
+
+#define cudaCheckKernel() \
+	do { \
+		cudaCheckReturn(cudaGetLastError()); \
+	} while(0)
 
 void init_array(DATA_TYPE* A, DATA_TYPE* B, DATA_TYPE* C, DATA_TYPE* D)
 {
@@ -77,8 +92,8 @@ void init_array(DATA_TYPE* A, DATA_TYPE* B, DATA_TYPE* C, DATA_TYPE* D)
 void GPU_argv_init()
 {
 	cudaDeviceProp deviceProp;
-	cudaGetDeviceProperties(&deviceProp, GPU_DEVICE);
-	cudaSetDevice( GPU_DEVICE );
+	cudaCheckReturn(cudaGetDeviceProperties(&deviceProp, GPU_DEVICE));
+	cudaCheckReturn(cudaSetDevice(GPU_DEVICE));
 }
 
 
@@ -115,43 +130,45 @@ __global__ void mm2_kernel2(DATA_TYPE *C, DATA_TYPE *D, DATA_TYPE *E)
 
 void mm2Cuda(DATA_TYPE* A, DATA_TYPE* B, DATA_TYPE* C, DATA_TYPE* D, DATA_TYPE* E)
 {
-
 	DATA_TYPE *A_gpu;
 	DATA_TYPE *B_gpu;
 	DATA_TYPE *C_gpu;
 	DATA_TYPE *D_gpu;
 	DATA_TYPE *E_gpu;
 
-	cudaMalloc((void **)&A_gpu, sizeof(DATA_TYPE) * NI * NK);
-	cudaMalloc((void **)&B_gpu, sizeof(DATA_TYPE) * NK * NJ);
-	cudaMalloc((void **)&C_gpu, sizeof(DATA_TYPE) * NI * NJ);
-	cudaMalloc((void **)&D_gpu, sizeof(DATA_TYPE) * NJ * NL);
-	cudaMalloc((void **)&E_gpu, sizeof(DATA_TYPE) * NI * NL);
-	
-	cudaMemcpy(A_gpu, A, sizeof(DATA_TYPE) * NI * NK, cudaMemcpyHostToDevice);
-	cudaMemcpy(B_gpu, B, sizeof(DATA_TYPE) * NK * NJ, cudaMemcpyHostToDevice);
-	cudaMemcpy(C_gpu, C, sizeof(DATA_TYPE) * NK * NJ, cudaMemcpyHostToDevice);
-	cudaMemcpy(D_gpu, D, sizeof(DATA_TYPE) * NJ * NL, cudaMemcpyHostToDevice);
-	cudaMemcpy(E_gpu, E, sizeof(DATA_TYPE) * NI * NL, cudaMemcpyHostToDevice);	
-		
+	cudaCheckReturn(cudaMalloc((void **)&A_gpu, sizeof(DATA_TYPE) * NI * NK));
+	cudaCheckReturn(cudaMalloc((void **)&B_gpu, sizeof(DATA_TYPE) * NK * NJ));
+	cudaCheckReturn(cudaMalloc((void **)&C_gpu, sizeof(DATA_TYPE) * NI * NJ));
+	cudaCheckReturn(cudaMalloc((void **)&D_gpu, sizeof(DATA_TYPE) * NJ * NL));
+	cudaCheckReturn(cudaMalloc((void **)&E_gpu, sizeof(DATA_TYPE) * NI * NL));
+
+	cudaCheckReturn(cudaMemcpy(A_gpu, A, sizeof(DATA_TYPE) * NI * NK, cudaMemcpyHostToDevice));
+	cudaCheckReturn(cudaMemcpy(B_gpu, B, sizeof(DATA_TYPE) * NK * NJ, cudaMemcpyHostToDevice));
+	cudaCheckReturn(cudaMemcpy(C_gpu, C, sizeof(DATA_TYPE) * NI * NJ, cudaMemcpyHostToDevice));
+	cudaCheckReturn(cudaMemcpy(D_gpu, D, sizeof(DATA_TYPE) * NJ * NL, cudaMemcpyHostToDevice));
+	cudaCheckReturn(cudaMemcpy(E_gpu, E, sizeof(DATA_TYPE) * NI * NL, cudaMemcpyHostToDevice));
+
 	dim3 block(DIM_THREAD_BLOCK_X, DIM_THREAD_BLOCK_Y);
-	dim3 grid1((size_t)ceil( ((float)NJ) / ((float)block.x) ), (size_t)ceil( ((float)NI) / ((float)block.y)) );
-	dim3 grid2((size_t)ceil( ((float)NL) / ((float)block.x) ), (size_t)ceil( ((float)NI) / ((float)block.y)) );
-	mm2_kernel1<<<grid1,block>>>(A_gpu, B_gpu, C_gpu);
-	cudaThreadSynchronize();
-	mm2_kernel2<<<grid2,block>>>(C_gpu, D_gpu, E_gpu);
-	cudaThreadSynchronize();
+	dim3 grid1((size_t)ceil(((float)NJ) / ((float)block.x)), (size_t)ceil(((float)NI) / ((float)block.y)));
+	dim3 grid2((size_t)ceil(((float)NL) / ((float)block.x)), (size_t)ceil(((float)NI) / ((float)block.y)));
 
-	cudaMemcpy(C, C_gpu, sizeof(DATA_TYPE) * NI * NJ, cudaMemcpyDeviceToHost);
-	cudaMemcpy(E, E_gpu, sizeof(DATA_TYPE) * NI * NL, cudaMemcpyDeviceToHost);
+	mm2_kernel1<<<grid1, block>>>(A_gpu, B_gpu, C_gpu);
+	cudaCheckKernel();
+	cudaCheckReturn(cudaDeviceSynchronize());
 
-	cudaFree(A_gpu);
-	cudaFree(B_gpu);
-	cudaFree(C_gpu);
-	cudaFree(D_gpu);
-	cudaFree(E_gpu);
+	mm2_kernel2<<<grid2, block>>>(C_gpu, D_gpu, E_gpu);
+	cudaCheckKernel();
+	cudaCheckReturn(cudaDeviceSynchronize());
+
+	cudaCheckReturn(cudaMemcpy(C, C_gpu, sizeof(DATA_TYPE) * NI * NJ, cudaMemcpyDeviceToHost));
+	cudaCheckReturn(cudaMemcpy(E, E_gpu, sizeof(DATA_TYPE) * NI * NL, cudaMemcpyDeviceToHost));
+
+	cudaCheckReturn(cudaFree(A_gpu));
+	cudaCheckReturn(cudaFree(B_gpu));
+	cudaCheckReturn(cudaFree(C_gpu));
+	cudaCheckReturn(cudaFree(D_gpu));
+	cudaCheckReturn(cudaFree(E_gpu));
 }
-
 
 int main(int argc, char** argv)
 {
@@ -176,7 +193,7 @@ int main(int argc, char** argv)
 	mm2Cuda(A, B, C, D, E);
 	t_end = rtclock();
 #ifdef POLYBENCH_TIME
-	fprintf(stdout, "%0.6lfs\n", t_end - t_start);
+	fprintf(stdout, "%0.6lf\n", t_end - t_start);
 #endif
 
 	free(C);

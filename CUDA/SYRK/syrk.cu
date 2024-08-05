@@ -7,6 +7,7 @@
  * Web address: http://www.cse.ohio-state.edu/~pouchet/software/polybench/GPU
  */
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -27,21 +28,35 @@
 #define DIM_THREAD_BLOCK_Y 8
 
 /* Declared constant values for alpha and beta (same as values in PolyBench 2.0) */
-#define alpha 12435
-#define beta 4546
+#define ALPHA 12435
+#define BETA 4546
 
 /* Can switch DATA_TYPE between float and double */
 #ifndef DATA_TYPE
 #define DATA_TYPE float
 #endif
 
+#define cudaCheckReturn(ret) \
+	do { \
+		cudaError_t cudaCheckReturn_e = (ret); \
+		if (cudaCheckReturn_e != cudaSuccess) { \
+			fprintf(stderr, "CUDA error: %s\n", cudaGetErrorString(cudaCheckReturn_e)); \
+			fflush(stderr); \
+		} \
+		assert(cudaCheckReturn_e == cudaSuccess); \
+	} while(0)
+
+#define cudaCheckKernel() \
+	do { \
+		cudaCheckReturn(cudaGetLastError()); \
+	} while(0)
 
 void init_arrays(DATA_TYPE* A, DATA_TYPE* C)
 {
 	int i, j;
 	
 	for (i = 0; i < N; i++)
-    	{
+	{
 		for (j = 0; j < M; j++)
 		{
 			A[i*M + j] = ((DATA_TYPE) i*j) / N;
@@ -58,14 +73,12 @@ void init_arrays(DATA_TYPE* A, DATA_TYPE* C)
 void GPU_argv_init()
 {
 	cudaDeviceProp deviceProp;
-	cudaGetDeviceProperties(&deviceProp, GPU_DEVICE);
-	cudaSetDevice( GPU_DEVICE );
-	
-	return;
+	cudaCheckReturn(cudaGetDeviceProperties(&deviceProp, GPU_DEVICE));
+	cudaCheckReturn(cudaSetDevice(GPU_DEVICE));
 }
 
 
-__global__ void syrk_kernel(DATA_TYPE ALPHA, DATA_TYPE BETA, DATA_TYPE *a, DATA_TYPE *c)
+__global__ void syrk_kernel(DATA_TYPE alpha, DATA_TYPE beta, DATA_TYPE *a, DATA_TYPE *c)
 {
 	/*  C := alpha*A*A' + beta*C */
 	int j = blockIdx.x * blockDim.x + threadIdx.x;
@@ -88,20 +101,21 @@ void syrkCuda(DATA_TYPE* A, DATA_TYPE* C)
 	DATA_TYPE* A_gpu;
 	DATA_TYPE* C_gpu;
 
-	cudaMalloc((void **)&A_gpu, sizeof(DATA_TYPE) * N * M);
-	cudaMalloc((void **)&C_gpu, sizeof(DATA_TYPE) * N * N);
-	cudaMemcpy(A_gpu, A, sizeof(DATA_TYPE) * N * M, cudaMemcpyHostToDevice);
-	cudaMemcpy(C_gpu, C, sizeof(DATA_TYPE) * N * N, cudaMemcpyHostToDevice);
+	cudaCheckReturn(cudaMalloc((void **)&A_gpu, sizeof(DATA_TYPE) * N * M));
+	cudaCheckReturn(cudaMalloc((void **)&C_gpu, sizeof(DATA_TYPE) * N * N));
+	cudaCheckReturn(cudaMemcpy(A_gpu, A, sizeof(DATA_TYPE) * N * M, cudaMemcpyHostToDevice));
+	cudaCheckReturn(cudaMemcpy(C_gpu, C, sizeof(DATA_TYPE) * N * N, cudaMemcpyHostToDevice));
 	
 	dim3 block(DIM_THREAD_BLOCK_X, DIM_THREAD_BLOCK_Y);
 	dim3 grid((size_t)(ceil(((float)N) / ((float)DIM_THREAD_BLOCK_X))), (size_t)ceil(((float)N) / ((float)DIM_THREAD_BLOCK_Y)));
-	syrk_kernel<<<grid,block>>>(alpha, beta, A_gpu,C_gpu);
-	cudaThreadSynchronize();
+	syrk_kernel<<<grid,block>>>(ALPHA, BETA, A_gpu, C_gpu);
+	cudaCheckKernel();
+	cudaCheckReturn(cudaDeviceSynchronize());
 
-	cudaMemcpy(C, C_gpu, sizeof(DATA_TYPE) * N * N, cudaMemcpyDeviceToHost);
+	cudaCheckReturn(cudaMemcpy(C, C_gpu, sizeof(DATA_TYPE) * N * N, cudaMemcpyDeviceToHost));
 
-	cudaFree(A_gpu);
-	cudaFree(C_gpu);
+	cudaCheckReturn(cudaFree(A_gpu));
+	cudaCheckReturn(cudaFree(C_gpu));
 }
 
 
@@ -124,7 +138,7 @@ int main()
 	t_end = rtclock();
 
 #ifdef POLYBENCH_TIME
-	fprintf(stdout, "%0.6lfs\n", t_end - t_start);
+	fprintf(stdout, "%0.6lf\n", t_end - t_start);
 #endif
 
 	free(A);
