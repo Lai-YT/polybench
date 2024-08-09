@@ -8,13 +8,22 @@ from pathlib import Path
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        sys.argv[0], formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        sys.argv[0],
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        epilog="NOTE: CUDA files are generated in the same directory as FILE.",
     )
     parser.add_argument("ppcg_root", metavar="PPCG_ROOT", type=Path)
     parser.add_argument("polybench_root", metavar="POLYBENCH_ROOT", type=Path)
     parser.add_argument("-D", metavar="NAME[=VALUE]", action="append", default=[])
     parser.add_argument("-v", "--verbose", action="store_true")
-    parser.add_argument("file", metavar="FILE", type=Path)
+    parser.add_argument("file", metavar="FILE", type=Path, help="the C file to compile")
+    parser.add_argument(
+        "-Xppcg",
+        metavar="OPT",
+        action="append",
+        default=[],
+        help="options to pass to PPCG (note: use -Xppcg=OPT to avoid argument parsing issues)",
+    )
     args = parser.parse_args()
 
     if args.verbose:
@@ -35,6 +44,7 @@ if __name__ == "__main__":
         f"{args.polybench_root}/utilities",
         str(args.file),
     ]
+    command.extend(args.Xppcg)
     logging.debug(" ".join(command))
     ret = subprocess.run(
         command,
