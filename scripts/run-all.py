@@ -33,13 +33,12 @@ if __name__ == "__main__":
         default=Path.cwd() / "results.csv",
         help="output file to write the results to",
     )
-    ppcg_group = parser.add_argument_group("PPCG benchmarks")
-    ppcg_group.add_argument("--ppcg", action="store_true", help="run PPCG benchmarks")
-    ppcg_group.add_argument(
-        "--ppcg-root",
-        type=Path,
-        metavar="PPCG_ROOT",
-        help="root directory of PPCG; only needed if --ppcg is specified",
+    benchmark_group = parser.add_mutually_exclusive_group()
+    benchmark_group.add_argument(
+        "--ppcg", type=Path, metavar="PPCG_ROOT", help="run benchmarks with PPCG"
+    )
+    benchmark_group.add_argument(
+        "--pluto", type=Path, metavar="PLUTO_ROOT", help="run benchmarks with PLUTO"
     )
     parser.add_argument(
         "-v", "--verbose", action="store_true", help="enable verbose output"
@@ -54,7 +53,7 @@ if __name__ == "__main__":
 
     for benchmark in BENCHMARKS:
         tmp = tempfile.mktemp()
-        if args.ppcg:
+        if args.ppcg is not None:
             # First, run PPCG to generate the CUDA code.
             for bench in (args.root / benchmark).iterdir():
                 source = bench / f"{bench.name}.c"
@@ -63,10 +62,12 @@ if __name__ == "__main__":
                     continue
                 compiler_opts = []
                 if (bench / "compiler.opts").is_file():
-                    compiler_opts = (bench / "compiler.opts").read_text().strip().split()
+                    compiler_opts = (
+                        (bench / "compiler.opts").read_text().strip().split()
+                    )
                 cmd = [
                     f"{args.root}/scripts/ppcg-compile.py",
-                    args.ppcg_root,
+                    args.ppcg,
                     args.root,
                     *compiler_opts,
                     source,
@@ -97,6 +98,48 @@ if __name__ == "__main__":
                     "--cuda-compiler",
                     "clang++-18",
                     "-v" if args.verbose else "--quiet",
+                ]
+            )
+        elif args.pluto is not None:
+            # First, run Pluto to generate the tiled code.
+            for bench in (args.root / benchmark).iterdir():
+                source = bench / f"{bench.name}.c"
+                if not source.exists():
+                    logging.warning(f"skipping {source} as it does not exist")
+                    continue
+                cmd = [
+                    f"{args.root}/scripts/pluto-compile.py",
+                    args.pluto,
+                    args.root,
+                    source,
+                    "-Xpluto=--noparallel",
+                    # PLUTO outputs the tiling information by default, which we don't need when benchmarking.
+                    "-Xpluto=-q",
+                ]
+                try:
+                    ret = subprocess.run(cmd, timeout=60)
+                except subprocess.TimeoutExpired:
+                    logging.error(f"pluto timed out for {source}")
+                    continue
+                if ret.returncode != 0:
+                    logging.error(f"pluto failed to compile {source}")
+            # Then, run the generated tiled code.
+            ret = subprocess.run(
+                [
+                    f"{args.root}/scripts/run-benchmark.py",
+                    benchmark,
+                    "-n",
+                    str(args.n),
+                    "-o",
+                    tmp,
+                    "--sort",
+                    "--dir",
+                    args.root,
+                    "--compiler",
+                    "clang-18",
+                    "-v" if args.verbose else "--quiet",
+                    "--suffixes",
+                    ".pluto.c",
                 ]
             )
         else:

@@ -42,12 +42,14 @@ class Runner:
 
     # NOTE: Rely on args.
     def _look_for_sources(self, bench: Path) -> list[Path]:
-        if args.cuda:
-            ext = ".cu"
-        else:
-            ext = ".c"
-        logging.info(f"looking for {ext} files")
-        return list(filter(lambda p: p.is_file(), bench.glob(f"*{ext}")))
+        logging.info(f"looking for files with suffixes {args.suffixes}")
+        sources = set(filter(lambda f: f.is_file(), bench.glob(f"*{args.suffixes}")))
+        excessive_suffix = set(bench.glob(f"*.*{args.suffixes}"))
+        if excessive_suffix:
+            logging.debug(
+                f"files excluded due to excessive suffix: {list(map(str, excessive_suffix))}"
+            )
+        return list(sources - excessive_suffix)
 
     def _compile(self, bench: Path, sources: list[Path], output: str) -> int:
         """
@@ -98,6 +100,7 @@ class Runner:
             if ret.returncode != 0:
                 logging.error(f"failed to execute {executable}")
                 return []
+            # NOTE: Outputting to stderr doesn't effect the result.
             res.append(float(ret.stdout))
             logging.info(f"{res[-1]}")
         return res
@@ -164,6 +167,14 @@ if __name__ == "__main__":
         help=str(BENCHMARKS),
     )
 
+    DEFAULT_C_SUFFIX = ".c"
+    DEFAULT_CUDA_SUFFIX = ".cu"
+    parser.add_argument(
+        "--suffixes",
+        type=str,
+        help=f'suffixes of the source files, e.g., ".c" and ".pluto.c"; if not provided, {DEFAULT_C_SUFFIX} for C files and {DEFAULT_CUDA_SUFFIX} for CUDA files',
+    )
+
     cuda_group = parser.add_argument_group("CUDA benchmarks")
     cuda_group.add_argument(
         "--cuda", action="store_true", help="look for CUDA files instead of C files"
@@ -196,6 +207,12 @@ if __name__ == "__main__":
     else:
         log_level = logging.INFO
     logging.basicConfig(level=log_level, format="[%(levelname)s] %(message)s")
+
+    if args.suffixes is None:
+        if args.cuda:
+            args.suffixes = DEFAULT_CUDA_SUFFIX
+        else:
+            args.suffixes = DEFAULT_C_SUFFIX
 
     runner = Runner(args.benchmark, args.dir, args.n)
     res: dict[str, list[float]] = runner.run()
