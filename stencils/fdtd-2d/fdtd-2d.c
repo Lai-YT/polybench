@@ -99,7 +99,7 @@ int main(int argc, char** argv)
 
 
 #pragma scop
-#pragma live-out ex, ey, hz
+// #pragma live-out ex, ey, hz
 
   for(t = 0; t < tmax; t++)
     {

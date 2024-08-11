@@ -155,7 +155,7 @@ int main(int argc, char** argv)
   polybench_start_instruments;
 
 #pragma scop
-#pragma live-out Bza, Hz
+// #pragma live-out Bza, Hz
 
   for (iz = 0; iz < Cz; iz++)
     {

@@ -132,7 +132,7 @@ int main(int argc, char** argv)
   polybench_start_instruments;
 
 #pragma scop
-#pragma live-out G
+// #pragma live-out G
 
   /* E := A*B */
   for (i = 0; i < ni; i++)

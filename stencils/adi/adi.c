@@ -89,7 +89,7 @@ int main(int argc, char** argv)
 
 
 #pragma scop
-#pragma live-out X
+// #pragma live-out X
 
   for (t = 0; t < tsteps; t++)
     {

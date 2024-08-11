@@ -83,7 +83,7 @@ int main(int argc, char** argv)
   polybench_start_instruments;
 
 #pragma scop
-#pragma live-out B
+// #pragma live-out B
 
   /*  B := alpha*A'*B, A triangular */
   for (i = 1; i < n; i++)

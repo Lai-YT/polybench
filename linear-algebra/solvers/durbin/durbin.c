@@ -84,7 +84,7 @@ int main(int argc, char** argv)
   polybench_start_instruments;
 
 #pragma scop
-#pragma live-out out
+// #pragma live-out out
 
   y[0][0] = r[0];
   beta[0] = 1;

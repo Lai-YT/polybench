@@ -96,7 +96,7 @@ int main(int argc, char** argv)
   polybench_start_instruments;
 
 #pragma scop
-#pragma live-out C
+// #pragma live-out C
 
   /*    C := alpha*A*B' + alpha*B*A' + beta*C */
   for (i = 0; i < n; i++)

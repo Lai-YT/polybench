@@ -97,7 +97,7 @@ int main(int argc, char** argv)
   polybench_start_instruments;
 
 #pragma scop
-#pragma live-out C
+// #pragma live-out C
 
   /*  C := alpha*A*B + beta*C, A is symetric */
   for (i = 0; i < m; i++)

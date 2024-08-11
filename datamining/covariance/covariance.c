@@ -86,7 +86,7 @@ int main(int argc, char** argv)
 
 
 #pragma scop
-#pragma live-out symmat
+// #pragma live-out symmat
 
   /* Determine mean of column vectors of input data matrix */
   for (j = 1; j <= m; j++)

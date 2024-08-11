@@ -103,7 +103,7 @@ int main(int argc, char** argv)
   polybench_start_instruments;
 
 #pragma scop
-#pragma live-out gauss_image
+// #pragma live-out gauss_image
 
     tot[0] = 0;
     for (k = t-1; k <= 1 + t; k++)

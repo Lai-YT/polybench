@@ -109,7 +109,7 @@ int main(int argc, char** argv)
     }
 
 #pragma scop
-#pragma live-out s
+// #pragma live-out s
 
   for (t = 0; t < niter; t++)
     {

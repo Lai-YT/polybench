@@ -91,7 +91,7 @@ int main(int argc, char** argv)
 #define sqrt_of_array_cell(x,j) sqrt(x[j])
 
 #pragma scop
-#pragma live-out symmat
+// #pragma live-out symmat
 
   /* Determine mean of column vectors of input data matrix */
   for (j = 1; j <= m; j++)

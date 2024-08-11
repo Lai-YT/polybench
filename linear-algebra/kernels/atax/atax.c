@@ -81,7 +81,7 @@ int main(int argc, char** argv)
   polybench_start_instruments;
 
 #pragma scop
-#pragma live-out y
+// #pragma live-out y
   for (i= 0; i < nx; i++)
     y[i] = 0;
   for (i = 0; i < ny; i++)
