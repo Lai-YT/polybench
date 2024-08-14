@@ -14,7 +14,9 @@ if __name__ == "__main__":
     parser.add_argument("pluto_root", metavar="PLUTO_ROOT", type=Path)
     parser.add_argument("polybench_root", metavar="POLYBENCH_ROOT", type=Path)
     parser.add_argument("-v", "--verbose", action="store_true")
-    parser.add_argument("-s", "--silent", action="store_true")
+    parser.add_argument(
+        "--no-silent", action="store_true", help="do not pass --silent to PLUTO"
+    )
     parser.add_argument("file", metavar="FILE", type=Path, help="the C file to compile")
     parser.add_argument(
         "-Xpluto",
@@ -25,9 +27,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    if args.silent:
-        log_level = logging.ERROR
-    elif args.verbose:
+    if args.verbose:
         log_level = logging.DEBUG
     else:
         log_level = logging.INFO
@@ -43,10 +43,9 @@ if __name__ == "__main__":
         f"{args.pluto_root}/polycc",
         str(args.file),
     ]
-    if args.silent:
+    if not args.no_silent:
+        # The default setup of PLUTO already outputs some information that is generally too much.
         command.append("--silent")
-    elif args.verbose:
-        command.append("--debug")
     command.extend(args.Xpluto)
     logging.debug(" ".join(command))
     ret = subprocess.run(

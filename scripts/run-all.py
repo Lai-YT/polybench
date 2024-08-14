@@ -116,9 +116,10 @@ if __name__ == "__main__":
                     args.root,
                     source,
                     "-Xpluto=--noparallel",
-                    # PLUTO outputs the tiling information by default, which we don't need when benchmarking.
-                    "-Xpluto=-q",
                 ]
+                if args.verbose:
+                    cmd.append("-v")
+
                 try:
                     ret = subprocess.run(cmd, timeout=60)
                 except subprocess.TimeoutExpired:
