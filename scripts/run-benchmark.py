@@ -60,6 +60,8 @@ class Runner:
             *self._compiler_command(),
             "-O3",
             *POLYBENCH_DEFINES,
+            # It's fine that we enable OpenMP even we don't use it.
+            "-fopenmp",
             "-lm",
             "-I",
             f"{self._bench_root}/utilities",

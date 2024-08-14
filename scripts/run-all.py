@@ -40,6 +40,12 @@ if __name__ == "__main__":
     benchmark_group.add_argument(
         "--pluto", type=Path, metavar="PLUTO_ROOT", help="run benchmarks with PLUTO"
     )
+    benchmark_group.add_argument(
+        "--pluto-parallel",
+        type=Path,
+        metavar="PLUTO_ROOT",
+        help="run benchmarks with PLUTO/OpenMP",
+    )
     parser.add_argument(
         "-v", "--verbose", action="store_true", help="enable verbose output"
     )
@@ -103,8 +109,12 @@ if __name__ == "__main__":
                     "-v" if args.verbose else "--quiet",
                 ]
             )
-        elif args.pluto is not None:
-            # First, run Pluto to generate the tiled code.
+        elif args.pluto is not None or args.pluto_parallel is not None:
+            pluto_root: Path = (
+                args.pluto if args.pluto is not None else args.pluto_parallel
+            )
+            parallel: bool = args.pluto_parallel is not None
+            # First, run Pluto.
             for bench in (args.root / benchmark).iterdir():
                 source = bench / f"{bench.name}.c"
                 if not source.exists():
@@ -112,13 +122,14 @@ if __name__ == "__main__":
                     continue
                 cmd = [
                     f"{args.root}/scripts/pluto-compile.py",
-                    args.pluto,
+                    pluto_root,
                     args.root,
                     source,
-                    "-Xpluto=--noparallel",
                 ]
                 if args.verbose:
                     cmd.append("-v")
+                if not parallel:
+                    cmd.append("-Xpluto=--noparallel")
 
                 try:
                     ret = subprocess.run(cmd, timeout=60)
@@ -127,7 +138,7 @@ if __name__ == "__main__":
                     continue
                 if ret.returncode != 0:
                     logging.error(f"pluto failed to compile {source}")
-            # Then, run the generated tiled code.
+            # Then, run the generated code.
             ret = subprocess.run(
                 [
                     f"{args.root}/scripts/run-benchmark.py",
