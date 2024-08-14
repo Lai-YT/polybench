@@ -51,6 +51,9 @@ if __name__ == "__main__":
         log_level = logging.INFO
     logging.basicConfig(level=log_level, format="[%(levelname)s] %(message)s")
 
+    args.output.touch(exist_ok=True)
+    # Since we will be appending to the output file, we need to clear it first.
+    args.output.write_text("")
     for benchmark in BENCHMARKS:
         tmp = tempfile.mktemp()
         if args.ppcg is not None:
@@ -160,6 +163,9 @@ if __name__ == "__main__":
                 ]
             )
         if ret.returncode == 0:
+            logging.info(
+                f"successfully ran {benchmark}; appending results to {args.output}"
+            )
             with args.output.open("a") as f:
-                f.write(open(tmp).read())
+                f.write(Path(tmp).read_text())
         Path(tmp).unlink(missing_ok=True)
