@@ -5,6 +5,10 @@
 
 #include "instrument.h"
 
+#if defined(__CUDACC__) && !defined(CUDA_DEVICE)
+#define CUDA_DEVICE 0
+#endif
+
 #ifndef POLYBENCH_N
 # define POLYBENCH_N 1024
 #endif
@@ -72,8 +76,16 @@ int main(int argc, char** argv)
     /* Initialize array. */
     init_array();
 
-    /* Start timer. */
-    polybench_start_instruments;
+#if defined(__CUDACC__) && defined(POLYBENCH_TIME_NO_CUDA_INIT_CTX)
+  cudaSetDevice(CUDA_DEVICE);
+#endif
+
+  /* Start timer. */
+  polybench_start_instruments;
+
+#if defined(__CUDACC__) && !defined(POLYBENCH_TIME_NO_CUDA_INIT_CTX)
+  cudaSetDevice(CUDA_DEVICE);
+#endif
 
 #pragma scop
 // #pragma live-out a
