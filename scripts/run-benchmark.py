@@ -100,6 +100,7 @@ class Runner:
         for _ in range(self._times):
             ret = subprocess.run([executable], capture_output=True, text=True)
             if ret.returncode != 0:
+                logging.error(ret.stderr)
                 logging.error(f"failed to execute {executable}")
                 return []
             # NOTE: Outputting to stderr doesn't effect the result.
