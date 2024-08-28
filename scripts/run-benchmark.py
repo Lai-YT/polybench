@@ -60,8 +60,6 @@ class Runner:
             *self._compiler_command(),
             "-O3",
             *POLYBENCH_DEFINES,
-            # It's fine that we enable OpenMP even we don't use it.
-            "-fopenmp",
             "-lm",
             "-I",
             f"{self._bench_root}/utilities",
@@ -84,7 +82,12 @@ class Runner:
     def _compiler_command(self) -> list[str]:
         if args.cuda:
             if args.cuda_compiler.startswith("nvcc"):
-                return [args.cuda_compiler, f"-arch={args.cuda_gpu_arch}"]
+                return [
+                    args.cuda_compiler,
+                    f"-arch={args.cuda_gpu_arch}",
+                    # NOTE: Relocatable device code; necessary for CUDA to compile multiple files together.
+                    "-rdc=true",
+                ]
             return [
                 args.cuda_compiler,
                 "-lcudart",
@@ -93,7 +96,11 @@ class Runner:
                 "-L/usr/local/cuda/lib64",
                 f"--cuda-gpu-arch={args.cuda_gpu_arch}",
             ]
-        return [args.compiler]
+        return [
+            args.compiler,
+            # It's fine that we enable OpenMP even we don't use it.
+            "-fopenmp",
+        ]
 
     def _execute(self, executable: str) -> list[float]:
         res = []
