@@ -7,8 +7,6 @@ import sys
 import tempfile
 from pathlib import Path
 
-POLYBENCH_DEFINES = ["-DPOLYBENCH_TIME", "-DDATA_TYPE=double"]
-
 
 class Runner:
     def __init__(self, bench_cat: str, bench_root: Path, times: int):
@@ -59,7 +57,7 @@ class Runner:
         compile_command = [
             *self._compiler_command(),
             "-O3",
-            *POLYBENCH_DEFINES,
+            *list(map(lambda x: f"-D{x}", args.D)),
             "-lm",
             "-I",
             f"{self._bench_root}/utilities",
@@ -105,7 +103,13 @@ class Runner:
     def _execute(self, executable: str) -> list[float]:
         res = []
         for _ in range(self._times):
-            ret = subprocess.run([executable], capture_output=True, text=True)
+            try:
+                ret = subprocess.run(
+                    [executable], timeout=200, capture_output=True, text=True
+                )
+            except subprocess.TimeoutExpired:
+                logging.error(f"timeout while executing {executable}")
+                return []
             if ret.returncode != 0:
                 logging.error(ret.stderr)
                 logging.error(f"failed to execute {executable}")

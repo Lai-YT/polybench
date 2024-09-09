@@ -33,6 +33,13 @@ if __name__ == "__main__":
         default=Path.cwd() / "results.csv",
         help="output file to write the results to",
     )
+    parser.add_argument(
+        "-D",
+        metavar="NAME[=VALUE]",
+        action="append",
+        default=["POLYBENCH_TIME"],
+        help="define a PolyBench macro",
+    )
     benchmark_group = parser.add_mutually_exclusive_group()
     benchmark_group.add_argument(
         "--ppcg", type=Path, metavar="PPCG_ROOT", help="run benchmarks with PPCG"
@@ -78,6 +85,7 @@ if __name__ == "__main__":
                     f"{args.root}/scripts/ppcg-compile.py",
                     args.ppcg,
                     args.root,
+                    *list(map(lambda x: f"-D{x}", args.D)),
                     *compiler_opts,
                     source,
                 ]
@@ -96,6 +104,7 @@ if __name__ == "__main__":
                 [
                     f"{args.root}/scripts/run-benchmark.py",
                     benchmark,
+                    *list(map(lambda x: f"-D{x}", args.D)),
                     "-n",
                     str(args.n),
                     "-o",
@@ -143,6 +152,7 @@ if __name__ == "__main__":
                 [
                     f"{args.root}/scripts/run-benchmark.py",
                     benchmark,
+                    *list(map(lambda x: f"-D{x}", args.D)),
                     "-n",
                     str(args.n),
                     "-o",
@@ -162,6 +172,7 @@ if __name__ == "__main__":
                 [
                     f"{args.root}/scripts/run-benchmark.py",
                     benchmark,
+                    *list(map(lambda x: f"-D{x}", args.D)),
                     "-n",
                     str(args.n),
                     "-o",
