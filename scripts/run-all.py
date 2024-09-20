@@ -92,12 +92,15 @@ if __name__ == "__main__":
                 if args.verbose:
                     cmd.append("-v")
                 # PPCG may be stuck in same cases, so we set a timeout.
+                # Using `Popen` instead of `run` to gain the ability to kill the process.
+                p = subprocess.Popen(cmd)
                 try:
-                    ret = subprocess.run(cmd, timeout=60)
+                    p.communicate(timeout=60)
                 except subprocess.TimeoutExpired:
+                    p.kill()
                     logging.error(f"ppcg timed out for {source}")
                     continue
-                if ret.returncode != 0:
+                if p.returncode != 0:
                     logging.error(f"ppcg failed to compile {source}")
             # Then, run the generated CUDA code.
             ret = subprocess.run(
